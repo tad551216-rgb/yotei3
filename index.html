@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#22333B">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>わが家の予定板</title>
+<style>
+  :root {
+    --ink: #22333B;
+    --paper: #F2F5F7;
+    --line: #E3E9ED;
+    --father: #3E7CB1;
+    --mother: #D1495B;
+    --son: #30A46C;
+    --son-bg: #DFF3E8;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Hiragino Maru Gothic ProN", "ヒラギノ丸ゴ ProN", "Zen Maru Gothic", sans-serif;
+    font-size: 16px;
+    /* ページ自体は一切スクロールさせない(ブラウザのURL欄の出没を防ぐ) */
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+  }
+  button { font-family: inherit; border: none; background: none; color: inherit; font-size: inherit; cursor: pointer; padding: 0; }
+  input, textarea { font-family: inherit; font-size: 16px; color: inherit; }
+
+  .wrap { max-width: 760px; margin: 0 auto; height: 100%; display: flex; flex-direction: column; }
+  header { padding: 14px 16px 8px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+  header h1 { font-size: 21px; margin: 0; letter-spacing: 0.04em; }
+  .chips { display: flex; gap: 4px; margin-top: 5px; }
+  .chip { font-size: 13px; color: #fff; border-radius: 999px; padding: 2px 10px; }
+  .gear { width: 46px; height: 46px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.12); font-size: 20px; }
+
+  .tabs { display: flex; gap: 4px; padding: 0 16px; flex-shrink: 0; }
+  .tabs button { flex: 1; padding: 11px 0; border-radius: 14px 14px 0 0; font-size: 17px; font-weight: bold; color: #9aa7af; }
+  .tabs button.active { background: #fff; color: var(--ink); box-shadow: 0 -1px 3px rgba(0,0,0,0.05); }
+
+  main { background: #fff; border-radius: 0 18px 18px 18px; box-shadow: 0 1px 6px rgba(0,0,0,0.08); padding: 12px 12px; margin: 0 8px 10px; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .view { display: none; }
+  .view.active { display: block; flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: 24px; }
+  #view-list.active { display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0; }
+
+  /* ナビ共通 */
+  .navrow { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .navbtn { background: #f1f4f6; border-radius: 12px; padding: 10px 12px; font-size: 16px; font-weight: bold; }
+  .navtitle { font-size: 19px; font-weight: bold; }
+
+  /* カレンダー */
+  /* カレンダー(連続スクロール) */
+  .calmonth { margin-bottom: 22px; }
+  .calmonthtitle { position: sticky; top: 0; z-index: 6; background: #fff; text-align: center; font-size: 19px; font-weight: bold; padding: 6px 0; }
+  .dowrow { display: grid; grid-template-columns: repeat(7,1fr); text-align: center; font-size: 14px; font-weight: bold; color: #7a8a94; margin-bottom: 4px; }
+  .calgrid { display: grid; grid-template-columns: repeat(7,1fr); gap: 1px; background: var(--line); border-radius: 14px; overflow: hidden; }
+  .cell { background: #fff; min-height: 84px; padding: 4px; }
+  .cell.blank { background: #F7F9FA; }
+  .cell.sonwork { background: var(--son-bg); }
+  .cellhead { display: flex; align-items: flex-start; justify-content: space-between; }
+  .daynum { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-weight: bold; font-size: 16px; }
+  .daynum.today { background: var(--ink); color: #fff !important; }
+  .calev { color: #fff; border-radius: 5px; padding: 0 4px; font-size: 12px; line-height: 19px; margin-top: 2px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .legend { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 16px; }
+  .hint { font-size: 14px; color: #9aa7af; margin-top: 6px; }
+
+  /* 一覧(連続スクロール) — 表の中だけがスクロールし、タブは常に見える */
+  #listScroll { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; border-radius: 12px; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  thead th { position: sticky; top: 0; z-index: 5; }
+  th { padding: 9px 0; color: #fff; font-size: 18px; }
+  th.datecol { width: 64px; color: #9aa7af; font-weight: normal; font-size: 15px; background: #fff; }
+  tbody tr { border-bottom: 2px solid var(--line); }
+  td { vertical-align: top; padding: 4px; height: 76px; }
+  td.datecell { text-align: center; font-weight: bold; padding-top: 9px; }
+  td.datecell .num { font-size: 26px; line-height: 1; }
+  td.datecell .dow { font-size: 16px; }
+  td.datecell .mnum { font-size: 19px; }
+  .todaynum { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%; background: var(--ink); color: #fff; font-size: 22px; }
+  .monthsep td { height: auto; padding: 7px 0; background: var(--ink); color: #fff; text-align: center; font-weight: bold; font-size: 17px; }
+  .todayfab { position: fixed; right: 16px; bottom: 22px; background: var(--ink); color: #fff; border-radius: 999px; padding: 14px 22px; font-size: 17px; font-weight: bold; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 40; }
+  .ev { color: #fff; border-radius: 10px; padding: 7px 8px; font-size: 17px; font-weight: bold; line-height: 1.3; margin-bottom: 4px; word-break: break-word; }
+  .plus { color: #e2e8eb; text-align: center; font-size: 22px; user-select: none; padding-top: 8px; }
+  .workchip { background: var(--son); color: #fff; border-radius: 10px; padding: 9px 0; font-size: 19px; font-weight: bold; text-align: center; }
+  td.soncell.on { background: var(--son-bg); }
+
+  /* 日記 */
+  textarea { width: 100%; border: 2px solid var(--line); border-radius: 14px; padding: 12px; font-size: 18px; line-height: 1.7; resize: vertical; }
+  .diaryrow { display: flex; gap: 8px; margin-top: 10px; }
+  .savebtn { flex: 1; background: var(--ink); color: #fff; border-radius: 14px; padding: 14px 0; font-size: 18px; font-weight: bold; }
+  .savebtn.saved { background: var(--son); }
+  .photobtn { border: 2px solid var(--ink); border-radius: 14px; padding: 12px 14px; font-size: 16px; font-weight: bold; text-align: center; }
+  .photobtn input { display: none; }
+  .thumbs { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-top: 12px; }
+  .thumb { position: relative; }
+  .thumb img { width: 100%; height: 110px; object-fit: cover; border-radius: 12px; display: block; }
+  .thumb .del { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; border-radius: 50%; background: rgba(34,51,59,0.7); color: #fff; font-size: 14px; }
+  .recent h3 { font-size: 16px; color: #8a979f; margin: 24px 0 8px; }
+  .recent button.entry { display: block; width: 100%; text-align: left; border: 2px solid var(--line); border-radius: 14px; padding: 10px 12px; margin-bottom: 6px; font-size: 16px; background: #fff; }
+  .recent button.entry.current { border-color: var(--ink); }
+  .recent .d { font-weight: bold; margin-right: 8px; }
+  .recent .t { color: #8a979f; }
+
+  /* モーダル */
+  .overlay { position: fixed; inset: 0; background: rgba(34,51,59,0.45); z-index: 50; display: none; align-items: flex-end; justify-content: center; overflow-y: auto; }
+  .overlay.open { display: flex; }
+  .sheet { background: #fff; width: 100%; max-width: 420px; border-radius: 18px 18px 0 0; padding: 16px; max-height: 92vh; overflow-y: auto; }
+  @media (min-width: 480px) { .overlay.open { align-items: center; } .sheet { border-radius: 18px; } }
+  .sheethead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .sheethead h2 { font-size: 18px; margin: 0; }
+  .x { color: #9aa7af; font-size: 18px; padding: 4px 8px; }
+  .label { font-size: 14px; color: #8a979f; margin: 12px 0 4px; }
+  .dayev { display: flex; align-items: center; justify-content: space-between; color: #fff; border-radius: 12px; padding: 10px 12px; margin-bottom: 5px; font-size: 18px; font-weight: bold; }
+  .dayev .del { background: rgba(255,255,255,0.25); border-radius: 9px; padding: 5px 12px; font-size: 15px; color: #fff; }
+  .presetgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .presetgrid button { border: 2px solid; border-radius: 14px; padding: 13px 4px; font-size: 18px; font-weight: bold; }
+  .freerow { display: flex; gap: 8px; }
+  .freerow input { flex: 1; min-width: 0; border: 1px solid #ccd5da; border-radius: 12px; padding: 11px 12px; }
+  .darkbtn { background: var(--ink); color: #fff; border-radius: 12px; padding: 11px 18px; font-weight: bold; font-size: 16px; flex-shrink: 0; }
+  .sheetfoot { display: flex; align-items: center; justify-content: space-between; margin-top: 16px; }
+  .linkbtn { color: #9aa7af; text-decoration: underline; font-size: 15px; }
+
+  /* 設定 */
+  .namerow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .dot { width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0; }
+  .namerow input { flex: 1; min-width: 0; border: 1px solid #ccd5da; border-radius: 10px; padding: 10px 12px; }
+  .items { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 8px; }
+  .item { color: #fff; border-radius: 999px; padding: 6px 12px; font-size: 16px; display: inline-flex; align-items: center; gap: 6px; }
+  .item button { background: rgba(255,255,255,0.3); width: 20px; height: 20px; border-radius: 50%; color: #fff; font-size: 12px; line-height: 20px; }
+  .fullbtn { display: block; width: 100%; background: var(--ink); color: #fff; border-radius: 14px; padding: 13px 0; font-size: 17px; font-weight: bold; margin-top: 20px; }
+
+  /* 写真の拡大 */
+  #photoViewer { position: fixed; inset: 0; background: rgba(0,0,0,0.88); z-index: 60; display: none; align-items: center; justify-content: center; padding: 12px; }
+  #photoViewer.open { display: flex; }
+  #photoViewer img { max-width: 100%; max-height: 100%; border-radius: 14px; }
+  #photoViewer .x { position: absolute; top: 14px; right: 14px; width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.2); color: #fff; font-size: 20px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>わが家の予定板</h1>
+      <div class="chips" id="memberChips"></div>
+    </div>
+    <button class="gear" id="gearBtn" title="設定">⚙</button>
+  </header>
+
+  <nav class="tabs">
+    <button data-tab="calendar">カレンダー</button>
+    <button data-tab="list" class="active">一覧</button>
+    <button data-tab="diary">日記</button>
+  </nav>
+
+  <main>
+    <!-- カレンダー(連続スクロール) -->
+    <section class="view" id="view-calendar">
+      <div class="legend" style="margin:0 0 8px"><span style="width:22px;height:22px;border-radius:6px;background:var(--son-bg);border:2px solid var(--son);display:inline-block"></span><span style="font-size:15px">緑色の日 = <span class="sonName">長男さん</span>の仕事の日</span></div>
+      <div id="calMonths"></div>
+      <button class="todayfab" id="goThisMonth">今月へ</button>
+    </section>
+
+    <!-- 一覧(連続スクロール) -->
+    <section class="view active" id="view-list">
+      <div id="listScroll">
+        <table>
+          <thead><tr id="listHead"></tr></thead>
+          <tbody id="listBody"></tbody>
+        </table>
+      </div>
+      <button class="todayfab" id="goToday">今日へ</button>
+    </section>
+
+    <!-- 日記 -->
+    <section class="view" id="view-diary">
+      <div class="navrow">
+        <button class="navbtn" id="diaryPrev">‹ 前の日</button>
+        <button class="navtitle" id="diaryTitle" title="今日へ戻る"></button>
+        <button class="navbtn" id="diaryNext">次の日 ›</button>
+      </div>
+      <textarea id="diaryText" rows="8" placeholder="今日の出来事を書きましょう…"></textarea>
+      <div class="diaryrow">
+        <button class="savebtn" id="diarySave">保存する</button>
+        <label class="photobtn" id="photoBtn">📷 写真を追加
+          <input type="file" accept="image/*" id="photoInput">
+        </label>
+      </div>
+      <div class="thumbs" id="thumbs"></div>
+      <p class="hint">写真は自動で縮小して保存します。写真をタップすると大きく表示されます。</p>
+      <div class="recent">
+        <h3>最近の日記</h3>
+        <div id="recentList"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- 予定選択モーダル -->
+<div class="overlay" id="pickOverlay">
+  <div class="sheet" id="pickSheet"></div>
+</div>
+
+<!-- 設定モーダル -->
+<div class="overlay" id="settingsOverlay">
+  <div class="sheet" id="settingsSheet"></div>
+</div>
+
+<!-- 写真の拡大表示 -->
+<div id="photoViewer">
+  <img id="photoViewerImg" alt="拡大した日記の写真">
+  <button class="x" id="photoViewerClose">✕</button>
+</div>
+
+<script>
+"use strict";
+
+// ========== 定数 ==========
+const SON_ID = "m3";
+const WORK_LABEL = "仕事";
+const WEEK = ["日","月","火","水","木","金","土"];
+const DEFAULT_MEMBERS = [
+  { id: "m1", name: "お父さん", color: "#3E7CB1" },
+  { id: "m2", name: "お母さん", color: "#D1495B" },
+  { id: "m3", name: "長男さん", color: "#30A46C" },
+];
+const DEFAULT_PRESETS = { m1: ["ゴルフ","病院","会合"], m2: ["パート","病院","買い物"] };
+
+// ========== 保存(本文はlocalStorage、写真はIndexedDB) ==========
+function load(key, fallback) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+  catch (e) { return fallback; }
+}
+function save(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); }
+  catch (e) { alert("保存に失敗しました。空き容量が足りない可能性があります。"); }
+}
+
+let dbPromise = null;
+function openDB() {
+  if (!dbPromise) {
+    dbPromise = new Promise((res, rej) => {
+      const r = indexedDB.open("fam-board-db", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("photos");
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    });
+  }
+  return dbPromise;
+}
+async function photoPut(id, data) {
+  const db = await openDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction("photos", "readwrite");
+    tx.objectStore("photos").put(data, id);
+    tx.oncomplete = () => res();
+    tx.onerror = () => rej(tx.error);
+  });
+}
+async function photoGet(id) {
+  const db = await openDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction("photos", "readonly");
+    const rq = tx.objectStore("photos").get(id);
+    rq.onsuccess = () => res(rq.result || null);
+    rq.onerror = () => rej(rq.error);
+  });
+}
+async function photoDel(id) {
+  const db = await openDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction("photos", "readwrite");
+    tx.objectStore("photos").delete(id);
+    tx.oncomplete = () => res();
+    tx.onerror = () => rej(tx.error);
+  });
+}
+
+// ========== ユーティリティ ==========
+const pad = n => String(n).padStart(2, "0");
+const ymKey = (y, m) => y + "-" + pad(m + 1);
+const dateKey = d => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+function parseDate(s) { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); }
+
+function fileToResizedDataUrl(file, maxSize, quality) {
+  maxSize = maxSize || 1280; quality = quality || 0.72;
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.onerror = () => reject(new Error("画像を読み込めませんでした"));
+      img.src = reader.result;
+    };
+    reader.onerror = () => reject(new Error("ファイルを読み込めませんでした"));
+    reader.readAsDataURL(file);
+  });
+}
+
+// ========== 状態 ==========
+let members = load("fam-members", DEFAULT_MEMBERS);
+let presets = load("fam-presets", DEFAULT_PRESETS);
+const today = new Date(); today.setHours(0, 0, 0, 0);
+const todayKey = dateKey(today);
+
+let calStartSerial = 0, calEndSerial = 0; // カレンダーの表示範囲(年*12+月の連番)
+function initCalRange() {
+  const cur = today.getFullYear() * 12 + today.getMonth();
+  calStartSerial = cur - 2;  // 2か月前から
+  calEndSerial = cur + 10;   // 9か月先まで(スクロールで自動延長)
+}
+initCalRange();
+let listStart = null, listEnd = null; // 一覧の表示範囲(連続スクロール)
+let pendingScrollDate = null; // 一覧を開いたときに合わせる日付
+function initListRange(center) {
+  listStart = new Date(center); listStart.setHours(0, 0, 0, 0);
+  listStart.setDate(listStart.getDate() - 7);
+  listEnd = new Date(center); listEnd.setHours(0, 0, 0, 0);
+  listEnd.setDate(listEnd.getDate() + 28);
+}
+initListRange(today);
+let diaryDate = todayKey;
+let diaryDirty = false;
+let pickCtx = null; // {date, memberId}
+const photoCache = {};
+
+const memberById = id => members.find(m => m.id === id) || members[0];
+const getEvents = ym => load("fam-events:" + ym, []);
+const setEvents = (ym, arr) => save("fam-events:" + ym, arr);
+const getDiary = ym => load("fam-diary:" + ym, {});
+const setDiary = (ym, dict) => save("fam-diary:" + ym, dict);
+
+// ========== 予定 ==========
+function addEvent(date, memberId, title) {
+  const ym = date.slice(0, 7);
+  const arr = getEvents(ym);
+  arr.push({ id: uid(), date, memberId, title });
+  setEvents(ym, arr);
+  updateDayRow(date); updateCalMonth(ym);
+}
+function removeEvent(ev) {
+  const ym = ev.date.slice(0, 7);
+  setEvents(ym, getEvents(ym).filter(x => x.id !== ev.id));
+  updateDayRow(ev.date); updateCalMonth(ym);
+}
+function toggleSonWork(date) {
+  const ym = date.slice(0, 7);
+  const arr = getEvents(ym);
+  const exist = arr.find(e => e.memberId === SON_ID && e.date === date);
+  if (exist) setEvents(ym, arr.filter(e => e.id !== exist.id));
+  else { arr.push({ id: uid(), date, memberId: SON_ID, title: WORK_LABEL }); setEvents(ym, arr); }
+  updateDayRow(date); updateCalMonth(ym);
+}
+
+// ========== ヘッダー・タブ ==========
+function renderHeader() {
+  document.getElementById("memberChips").innerHTML =
+    members.map(m => `<span class="chip" style="background:${m.color}">${esc(m.name)}</span>`).join("");
+  document.querySelectorAll(".sonName").forEach(el => { el.textContent = memberById(SON_ID).name; });
+}
+document.querySelectorAll(".tabs button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    if (diaryDirty) saveDiaryEntry(); // 日記の書きかけを自動保存
+    document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("active", b === btn));
+    document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+    document.getElementById("view-" + btn.dataset.tab).classList.add("active");
+    if (btn.dataset.tab === "calendar") {
+      renderCalendar();
+      scrollToMonth(ymKey(today.getFullYear(), today.getMonth()));
+    }
+    if (btn.dataset.tab === "list") {
+      renderList();
+      scrollToDate(pendingScrollDate || todayKey);
+      pendingScrollDate = null;
+    }
+    if (btn.dataset.tab === "diary") { renderDiary(); document.getElementById("view-diary").scrollTop = 0; }
+  });
+});
+
+// ========== カレンダー(連続縦スクロール) ==========
+function monthHTML(serial) { // serial = 年*12 + 月(0始まり)
+  const y = Math.floor(serial / 12), m = serial % 12;
+  const ym = ymKey(y, m);
+  const events = getEvents(ym);
+  const firstDow = new Date(y, m, 1).getDay();
+  const days = new Date(y, m + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < firstDow; i++) cells.push(null);
+  for (let d = 1; d <= days; d++) cells.push(d);
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const grid = cells.map((d, i) => {
+    if (!d) return `<div class="cell blank"></div>`;
+    const date = ym + "-" + pad(d);
+    const dayEvents = events.filter(e => e.date === date);
+    const sonWork = dayEvents.some(e => e.memberId === SON_ID);
+    const isToday = date === todayKey;
+    const numColor = isToday ? "#fff" : (i % 7 === 0 ? "#D1495B" : i % 7 === 6 ? "#3E7CB1" : "#22333B");
+    const evHtml = dayEvents.filter(e => e.memberId !== SON_ID)
+      .map(e => `<div class="calev" style="background:${memberById(e.memberId).color}">${esc(e.title)}</div>`).join("");
+    return `<div class="cell${sonWork ? " sonwork" : ""}" data-date="${date}">
+      <div class="cellhead">
+        <div class="daynum${isToday ? " today" : ""}" style="color:${numColor}">${d}</div>
+      </div>${evHtml}</div>`;
+  }).join("");
+
+  const dows = WEEK.map((w, i) =>
+    `<div style="color:${i === 0 ? "#D1495B" : i === 6 ? "#3E7CB1" : "#7a8a94"}">${w}</div>`).join("");
+
+  return `<div class="calmonth" data-ym="${ym}">
+    <div class="calmonthtitle">${y}年 ${m + 1}月</div>
+    <div class="dowrow">${dows}</div>
+    <div class="calgrid">${grid}</div>
+  </div>`;
+}
+function calRangeHTML(from, to) { // fromは含む、toは含まない
+  let html = "";
+  for (let s = from; s < to; s++) html += monthHTML(s);
+  return html;
+}
+function renderCalendar() {
+  document.getElementById("calMonths").innerHTML = calRangeHTML(calStartSerial, calEndSerial);
+}
+function updateCalMonth(ym) { // 1か月分だけ差し替え(スクロール位置を保つ)
+  const el = document.querySelector(`#calMonths .calmonth[data-ym="${ym}"]`);
+  if (!el) return;
+  const [y, m] = ym.split("-").map(Number);
+  el.outerHTML = monthHTML(y * 12 + (m - 1));
+}
+function scrollToMonth(ym) {
+  const box = document.getElementById("view-calendar");
+  const el = document.querySelector(`#calMonths .calmonth[data-ym="${ym}"]`);
+  if (!el) return;
+  const y = el.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop - 2;
+  box.scrollTop = Math.max(0, y);
+}
+document.getElementById("calMonths").addEventListener("click", e => {
+  const cell = e.target.closest("[data-date]");
+  if (!cell) return;
+  const date = cell.dataset.date;
+  initListRange(parseDate(date));
+  pendingScrollDate = date;
+  document.querySelector('.tabs button[data-tab="list"]').click();
+});
+document.getElementById("goThisMonth").addEventListener("click", () => {
+  const cur = today.getFullYear() * 12 + today.getMonth();
+  if (cur < calStartSerial || cur >= calEndSerial) { initCalRange(); renderCalendar(); }
+  scrollToMonth(ymKey(today.getFullYear(), today.getMonth()));
+});
+// スクロールで過去・未来の月を自動で継ぎ足す
+let calBusy = false;
+document.getElementById("view-calendar").addEventListener("scroll", () => {
+  if (calBusy) return;
+  const box = document.getElementById("view-calendar");
+  if (box.scrollTop + box.clientHeight > box.scrollHeight - 1200) {
+    calBusy = true;
+    const from = calEndSerial;
+    calEndSerial += 6;
+    document.getElementById("calMonths").insertAdjacentHTML("beforeend", calRangeHTML(from, calEndSerial));
+    calBusy = false;
+  } else if (box.scrollTop < 600) {
+    calBusy = true;
+    const to = calStartSerial;
+    calStartSerial -= 6;
+    const before = box.scrollHeight;
+    document.getElementById("calMonths").insertAdjacentHTML("afterbegin", calRangeHTML(calStartSerial, to));
+    box.scrollTop += box.scrollHeight - before;
+    calBusy = false;
+  }
+}, { passive: true });
+
+// ========== 一覧(連続縦スクロール) ==========
+function dayRowHTML(dt, getEv) {
+  const date = dateKey(dt);
+  const dow = dt.getDay();
+  const isToday = date === todayKey;
+  const rowBg = isToday ? "#FFF6DC" : dow === 0 ? "#FDF4F5" : dow === 6 ? "#F2F7FB" : "#fff";
+  const dColor = dow === 0 ? "#D1495B" : dow === 6 ? "#3E7CB1" : "#22333B";
+  const all = getEv(date.slice(0, 7));
+  // 日曜と月初は「月/日」で表示して、スクロール中でも月が分かるようにする
+  const showMonth = dow === 0 || dt.getDate() === 1;
+  const numHtml = isToday
+    ? `<span class="todaynum">${dt.getDate()}</span>`
+    : showMonth
+    ? `<span class="mnum">${dt.getMonth() + 1}/${dt.getDate()}</span>`
+    : dt.getDate();
+
+  let row = `<tr data-date="${date}" style="background:${rowBg}">
+    <td class="datecell" style="color:${dColor}">
+      <div class="num">${numHtml}</div><div class="dow">(${WEEK[dow]})</div>
+    </td>`;
+
+  // お父さん・お母さん
+  members.filter(m => m.id !== SON_ID).forEach(m => {
+    const evs = all.filter(e => e.date === date && e.memberId === m.id);
+    const inner = evs.length
+      ? evs.map(e => `<div class="ev" style="background:${m.color}">${esc(e.title)}</div>`).join("")
+      : `<div class="plus">＋</div>`;
+    row += `<td data-pick-date="${date}" data-pick-member="${m.id}">${inner}</td>`;
+  });
+
+  // 長男さん(トグル)
+  const sonEv = all.find(e => e.date === date && e.memberId === SON_ID);
+  row += `<td class="soncell${sonEv ? " on" : ""}" data-toggle-date="${date}">
+    ${sonEv ? `<div class="workchip">仕事</div>` : `<div class="plus">—</div>`}</td></tr>`;
+  return row;
+}
+function rowsHTML(from, to) { // fromは含む、toは含まない
+  const cache = {};
+  const getEv = ym => cache[ym] || (cache[ym] = getEvents(ym));
+  let html = "";
+  for (let d = new Date(from); d < to; d.setDate(d.getDate() + 1)) {
+    if (d.getDate() === 1) {
+      html += `<tr class="monthsep"><td colspan="${members.length + 1}">${d.getFullYear()}年${d.getMonth() + 1}月</td></tr>`;
+    }
+    html += dayRowHTML(d, getEv);
+  }
+  return html;
+}
+function renderList() {
+  document.getElementById("listHead").innerHTML =
+    `<th class="datecol">日付</th>` +
+    members.map(m => `<th style="background:${m.color}">${esc(m.name)}</th>`).join("");
+  document.getElementById("listBody").innerHTML = rowsHTML(listStart, listEnd);
+}
+function updateDayRow(date) { // 1日分の行だけ差し替え(スクロール位置を保つ)
+  const tr = document.querySelector(`#listBody tr[data-date="${date}"]`);
+  if (!tr) return;
+  const cache = {};
+  const getEv = ym => cache[ym] || (cache[ym] = getEvents(ym));
+  tr.outerHTML = dayRowHTML(parseDate(date), getEv);
+}
+function scrollToDate(date) {
+  const box = document.getElementById("listScroll");
+  const tr = document.querySelector(`#listBody tr[data-date="${date}"]`);
+  if (!tr) return;
+  const y = tr.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop - 50; // 固定見出しぶん
+  box.scrollTop = Math.max(0, y);
+}
+document.getElementById("listBody").addEventListener("click", e => {
+  const pick = e.target.closest("[data-pick-date]");
+  if (pick) { openPick(pick.dataset.pickDate, pick.dataset.pickMember); return; }
+  const tog = e.target.closest("[data-toggle-date]");
+  if (tog) toggleSonWork(tog.dataset.toggleDate);
+});
+document.getElementById("goToday").addEventListener("click", () => {
+  const t = parseDate(todayKey);
+  if (t < listStart || t >= listEnd) { initListRange(today); renderList(); }
+  scrollToDate(todayKey);
+});
+// スクロールで過去・未来の日を自動で継ぎ足す(枠の中だけがスクロールする)
+let listBusy = false;
+document.getElementById("listScroll").addEventListener("scroll", () => {
+  if (listBusy) return;
+  const box = document.getElementById("listScroll");
+  if (box.scrollTop + box.clientHeight > box.scrollHeight - 900) {
+    listBusy = true;
+    const from = new Date(listEnd);
+    listEnd.setDate(listEnd.getDate() + 14);
+    document.getElementById("listBody").insertAdjacentHTML("beforeend", rowsHTML(from, listEnd));
+    listBusy = false;
+  } else if (box.scrollTop < 400) {
+    listBusy = true;
+    const to = new Date(listStart);
+    listStart.setDate(listStart.getDate() - 14);
+    const before = box.scrollHeight;
+    document.getElementById("listBody").insertAdjacentHTML("afterbegin", rowsHTML(new Date(listStart), to));
+    box.scrollTop += box.scrollHeight - before;
+    listBusy = false;
+  }
+}, { passive: true });
+
+
+// ========== 予定選択モーダル ==========
+function openPick(date, memberId) {
+  pickCtx = { date, memberId };
+  renderPick();
+  document.getElementById("pickOverlay").classList.add("open");
+}
+function closePick() {
+  pickCtx = null;
+  document.getElementById("pickOverlay").classList.remove("open");
+}
+function renderPick() {
+  if (!pickCtx) return;
+  const m = memberById(pickCtx.memberId);
+  const d = parseDate(pickCtx.date);
+  const label = (d.getMonth() + 1) + "月" + d.getDate() + "日(" + WEEK[d.getDay()] + ")";
+  const evs = getEvents(pickCtx.date.slice(0, 7)).filter(e => e.date === pickCtx.date && e.memberId === m.id);
+  const list = presets[m.id] || [];
+
+  document.getElementById("pickSheet").innerHTML = `
+    <div class="sheethead"><h2>${esc(m.name)}の予定 ${label}</h2><button class="x" data-act="close">✕</button></div>
+    ${evs.length ? `<div class="label">この日の予定</div>` +
+      evs.map(e => `<div class="dayev" style="background:${m.color}"><span>${esc(e.title)}</span>
+        <button class="del" data-remove="${e.id}">削除</button></div>`).join("") : ""}
+    <div class="label">リストから選んで追加</div>
+    <div class="presetgrid">
+      ${list.length
+        ? list.map(p => `<button style="border-color:${m.color};color:${m.color}" data-preset="${esc(p)}">${esc(p)}</button>`).join("")
+        : `<p style="grid-column:1/3;color:#9aa7af;font-size:15px;margin:0">予定リストが空です。下の「予定リストを編集する」から登録してください。</p>`}
+    </div>
+    <div class="label">自由に入力して追加</div>
+    <div class="freerow">
+      <input id="pickFree" placeholder="例: 法事">
+      <button class="darkbtn" data-act="free">追加</button>
+    </div>
+    <div class="sheetfoot">
+      <button class="linkbtn" data-act="settings">予定リストを編集する</button>
+      <button class="darkbtn" data-act="close">閉じる</button>
+    </div>`;
+}
+document.getElementById("pickSheet").addEventListener("click", e => {
+  if (!pickCtx) return;
+  const t = e.target.closest("button");
+  if (!t) return;
+  if (t.dataset.preset !== undefined) { addEvent(pickCtx.date, pickCtx.memberId, t.dataset.preset); renderPick(); return; }
+  if (t.dataset.remove) {
+    const ym = pickCtx.date.slice(0, 7);
+    const ev = getEvents(ym).find(x => x.id === t.dataset.remove);
+    if (ev) removeEvent(ev);
+    renderPick(); return;
+  }
+  if (t.dataset.act === "free") {
+    const inp = document.getElementById("pickFree");
+    const v = inp.value.trim();
+    if (v) { addEvent(pickCtx.date, pickCtx.memberId, v); inp.value = ""; renderPick(); }
+    return;
+  }
+  if (t.dataset.act === "settings") { closePick(); openSettings(); return; }
+  if (t.dataset.act === "close") closePick();
+});
+document.getElementById("pickOverlay").addEventListener("click", e => { if (e.target.id === "pickOverlay") closePick(); });
+
+// ========== 設定モーダル ==========
+let editLists = null, editNames = null;
+function openSettings() {
+  editNames = members.map(m => m.name);
+  editLists = { m1: (presets.m1 || []).slice(), m2: (presets.m2 || []).slice() };
+  renderSettings();
+  document.getElementById("settingsOverlay").classList.add("open");
+}
+function closeSettings() { document.getElementById("settingsOverlay").classList.remove("open"); }
+function renderSettings() {
+  const sheet = document.getElementById("settingsSheet");
+  sheet.innerHTML = `
+    <div class="sheethead"><h2>設定</h2><button class="x" data-act="close">✕</button></div>
+    <div class="label">3人の名前</div>
+    ${members.map((m, i) => `
+      <div class="namerow"><span class="dot" style="background:${m.color}"></span>
+      <input data-name="${i}" value="${esc(editNames[i])}"></div>`).join("")}
+    ${["m1", "m2"].map(id => {
+      const m = memberById(id);
+      const i = members.findIndex(x => x.id === id);
+      return `
+      <div class="label" style="color:${m.color};font-weight:bold;font-size:15px">${esc(editNames[i] || m.name)}の予定内容リスト</div>
+      <div class="items">
+        ${editLists[id].length
+          ? editLists[id].map(item => `<span class="item" style="background:${m.color}">${esc(item)}
+              <button data-del-item="${id}|${esc(item)}">✕</button></span>`).join("")
+          : `<span style="color:#c4ccd1;font-size:14px">まだ登録がありません</span>`}
+      </div>
+      <div class="freerow">
+        <input data-new-item="${id}" placeholder="例: ゴルフ">
+        <button class="darkbtn" style="background:${m.color}" data-add-item="${id}">追加</button>
+      </div>`;
+    }).join("")}
+    <div class="label" style="margin-top:22px">バックアップ</div>
+    <div class="freerow">
+      <button class="darkbtn" style="flex:1" data-act="export">書き出す(保存)</button>
+      <button class="darkbtn" style="flex:1;background:#3E7CB1" data-act="import">読み込む(復元)</button>
+    </div>
+    <input type="file" accept=".json,application/json" id="importFile" style="display:none">
+    <p style="font-size:13px;color:#9aa7af;margin:6px 0 0">予定・日記・写真をすべて1つのファイルに保存し、後から元に戻せます。</p>
+    <button class="fullbtn" data-act="save">保存する</button>`;
+}
+document.getElementById("settingsSheet").addEventListener("click", e => {
+  const t = e.target.closest("button");
+  if (!t) return;
+  // 入力中の名前を保持
+  document.querySelectorAll("#settingsSheet [data-name]").forEach(inp => { editNames[Number(inp.dataset.name)] = inp.value; });
+  if (t.dataset.delItem) {
+    const [id, item] = t.dataset.delItem.split("|");
+    editLists[id] = editLists[id].filter(x => x !== item);
+    renderSettings(); return;
+  }
+  if (t.dataset.addItem) {
+    const id = t.dataset.addItem;
+    const inp = document.querySelector(`#settingsSheet [data-new-item="${id}"]`);
+    const v = inp.value.trim();
+    if (v && !editLists[id].includes(v)) { editLists[id].push(v); renderSettings(); }
+    return;
+  }
+  if (t.dataset.act === "export") { exportBackup(); return; }
+  if (t.dataset.act === "import") { document.getElementById("importFile").click(); return; }
+  if (t.dataset.act === "save") {
+    members = members.map((m, i) => ({ ...m, name: (editNames[i] || "").trim() || m.name }));
+    presets = editLists;
+    save("fam-members", members);
+    save("fam-presets", presets);
+    renderHeader(); renderList(); renderCalendar();
+    closeSettings(); return;
+  }
+  if (t.dataset.act === "close") closeSettings();
+});
+document.getElementById("settingsOverlay").addEventListener("click", e => { if (e.target.id === "settingsOverlay") closeSettings(); });
+document.getElementById("gearBtn").onclick = openSettings;
+
+// ========== バックアップ(書き出し・読み込み) ==========
+async function exportBackup() {
+  // 予定・日記などの本文データ
+  const local = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.indexOf("fam-") === 0) local[k] = localStorage.getItem(k);
+  }
+  // 写真データ
+  const photos = {};
+  try {
+    const db = await openDB();
+    await new Promise((res, rej) => {
+      const tx = db.transaction("photos", "readonly");
+      const store = tx.objectStore("photos");
+      const kq = store.getAllKeys();
+      const vq = store.getAll();
+      tx.oncomplete = () => {
+        kq.result.forEach((k, i) => { photos[k] = vq.result[i]; });
+        res();
+      };
+      tx.onerror = () => rej(tx.error);
+    });
+  } catch (e) { /* 写真なしでも本文だけは書き出す */ }
+
+  const data = {
+    app: "wagaya-yoteiban",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    local, photos,
+  };
+  try {
+    const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+    const a = document.createElement("a");
+    const d = new Date();
+    a.href = URL.createObjectURL(blob);
+    a.download = "yoteiban-backup-" + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + ".json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  } catch (e) {
+    alert("書き出しに失敗しました: " + e.message);
+  }
+}
+
+async function importBackup(file) {
+  let data;
+  try {
+    const text = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result);
+      r.onerror = () => rej(new Error("読み込みエラー"));
+      r.readAsText(file);
+    });
+    data = JSON.parse(text);
+  } catch (e) {
+    alert("ファイルを読み込めませんでした。");
+    return;
+  }
+  if (!data || data.app !== "wagaya-yoteiban" || !data.local) {
+    alert("このアプリのバックアップファイルではありません。");
+    return;
+  }
+  if (!confirm("現在のデータをバックアップの内容で置き換えます。よろしいですか?")) return;
+
+  // 本文データを入れ替え
+  const oldKeys = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.indexOf("fam-") === 0) oldKeys.push(k);
+  }
+  oldKeys.forEach(k => localStorage.removeItem(k));
+  Object.keys(data.local).forEach(k => {
+    if (k.indexOf("fam-") === 0) {
+      try { localStorage.setItem(k, data.local[k]); } catch (e) {}
+    }
+  });
+
+  // 写真を入れ替え
+  try {
+    const db = await openDB();
+    await new Promise((res, rej) => {
+      const tx = db.transaction("photos", "readwrite");
+      const store = tx.objectStore("photos");
+      store.clear();
+      Object.keys(data.photos || {}).forEach(k => store.put(data.photos[k], k));
+      tx.oncomplete = () => res();
+      tx.onerror = () => rej(tx.error);
+    });
+  } catch (e) {
+    alert("写真の復元に失敗しました(予定・日記の本文は復元済みです)。");
+  }
+
+  // 画面を読み直し
+  members = load("fam-members", DEFAULT_MEMBERS);
+  presets = load("fam-presets", DEFAULT_PRESETS);
+  Object.keys(photoCache).forEach(k => { delete photoCache[k]; });
+  renderHeader(); renderCalendar(); renderList(); renderDiary();
+  closeSettings();
+  alert("バックアップから復元しました。");
+}
+
+document.getElementById("settingsSheet").addEventListener("change", e => {
+  if (e.target.id === "importFile") {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (f) importBackup(f);
+  }
+});
+
+// ========== 日記 ==========
+function diaryEntry(date) {
+  const dict = getDiary(date.slice(0, 7));
+  return dict[date] || { text: "", photos: [] };
+}
+function writeDiaryEntry(date, text, photos) {
+  const ym = date.slice(0, 7);
+  const dict = getDiary(ym);
+  if ((text && text.trim()) || photos.length > 0) dict[date] = { text, photos };
+  else delete dict[date];
+  setDiary(ym, dict);
+}
+function saveDiaryEntry() {
+  const entry = diaryEntry(diaryDate);
+  writeDiaryEntry(diaryDate, document.getElementById("diaryText").value, entry.photos);
+  diaryDirty = false;
+}
+async function renderDiary() {
+  const d = parseDate(diaryDate);
+  document.getElementById("diaryTitle").textContent =
+    d.getFullYear() + "年" + (d.getMonth() + 1) + "月" + d.getDate() + "日(" + WEEK[d.getDay()] + ")";
+  const entry = diaryEntry(diaryDate);
+  document.getElementById("diaryText").value = entry.text || "";
+  diaryDirty = false;
+  renderRecent();
+  await renderThumbs(entry.photos || []);
+}
+async function renderThumbs(ids) {
+  const wrap = document.getElementById("thumbs");
+  wrap.innerHTML = ids.map(id => `
+    <div class="thumb" data-pid="${id}">
+      <img alt="日記の写真">
+      <button class="del" data-del-photo="${id}">✕</button>
+    </div>`).join("");
+  for (const id of ids) {
+    if (!photoCache[id]) {
+      try { photoCache[id] = await photoGet(id); } catch (e) { photoCache[id] = null; }
+    }
+    const el = wrap.querySelector(`[data-pid="${id}"] img`);
+    if (el && photoCache[id]) el.src = photoCache[id];
+  }
+}
+function renderRecent() {
+  const ym = diaryDate.slice(0, 7);
+  const d = parseDate(diaryDate);
+  const pd = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+  const prevYm = ymKey(pd.getFullYear(), pd.getMonth());
+  const all = Object.assign({}, prevYm !== ym ? getDiary(prevYm) : {}, getDiary(ym));
+  const entries = Object.entries(all)
+    .filter(([, v]) => (v.text && v.text.trim()) || (v.photos && v.photos.length))
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .slice(0, 14);
+  document.getElementById("recentList").innerHTML = entries.length
+    ? entries.map(([date, v]) => {
+        const dd = parseDate(date);
+        const label = (dd.getMonth() + 1) + "月" + dd.getDate() + "日(" + WEEK[dd.getDay()] + ")";
+        const preview = (v.text || "").replace(/\s+/g, " ").slice(0, 18);
+        return `<button class="entry${date === diaryDate ? " current" : ""}" data-open-date="${date}">
+          <span class="d">${label}</span>${v.photos && v.photos.length ? "📷" + v.photos.length + " " : ""}
+          <span class="t">${esc(preview)}${(v.text || "").length > 18 ? "…" : ""}</span></button>`;
+      }).join("")
+    : `<p style="color:#c4ccd1">まだ日記はありません。今日のひとことをどうぞ。</p>`;
+}
+
+document.getElementById("diaryText").addEventListener("input", () => { diaryDirty = true; });
+document.getElementById("diarySave").addEventListener("click", () => {
+  saveDiaryEntry();
+  const btn = document.getElementById("diarySave");
+  btn.textContent = "保存しました ✓"; btn.classList.add("saved");
+  setTimeout(() => { btn.textContent = "保存する"; btn.classList.remove("saved"); }, 1500);
+  renderRecent();
+});
+function moveDiary(delta) {
+  if (diaryDirty) saveDiaryEntry();
+  const d = parseDate(diaryDate);
+  d.setDate(d.getDate() + delta);
+  diaryDate = dateKey(d);
+  renderDiary();
+}
+document.getElementById("diaryPrev").onclick = () => moveDiary(-1);
+document.getElementById("diaryNext").onclick = () => moveDiary(1);
+document.getElementById("diaryTitle").onclick = () => {
+  if (diaryDirty) saveDiaryEntry();
+  diaryDate = todayKey;
+  renderDiary();
+};
+document.getElementById("recentList").addEventListener("click", e => {
+  const t = e.target.closest("[data-open-date]");
+  if (!t) return;
+  if (diaryDirty) saveDiaryEntry();
+  diaryDate = t.dataset.openDate;
+  renderDiary();
+});
+
+// 写真の追加・削除・拡大
+document.getElementById("photoInput").addEventListener("change", async e => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  const btn = document.getElementById("photoBtn");
+  btn.firstChild.textContent = "保存中… ";
+  try {
+    const dataUrl = await fileToResizedDataUrl(file);
+    const id = uid();
+    await photoPut(id, dataUrl);
+    photoCache[id] = dataUrl;
+    const entry = diaryEntry(diaryDate);
+    const photos = (entry.photos || []).concat(id);
+    writeDiaryEntry(diaryDate, document.getElementById("diaryText").value, photos);
+    diaryDirty = false;
+    await renderThumbs(photos);
+    renderRecent();
+  } catch (err) {
+    alert("写真の保存に失敗しました: " + err.message);
+  } finally {
+    btn.firstChild.textContent = "📷 写真を追加";
+  }
+});
+document.getElementById("thumbs").addEventListener("click", async e => {
+  const del = e.target.closest("[data-del-photo]");
+  if (del) {
+    const id = del.dataset.delPhoto;
+    const entry = diaryEntry(diaryDate);
+    const photos = (entry.photos || []).filter(x => x !== id);
+    writeDiaryEntry(diaryDate, document.getElementById("diaryText").value, photos);
+    try { await photoDel(id); } catch (err) {}
+    await renderThumbs(photos);
+    renderRecent();
+    return;
+  }
+  const th = e.target.closest(".thumb");
+  if (th && photoCache[th.dataset.pid]) {
+    document.getElementById("photoViewerImg").src = photoCache[th.dataset.pid];
+    document.getElementById("photoViewer").classList.add("open");
+  }
+});
+document.getElementById("photoViewer").addEventListener("click", () => {
+  document.getElementById("photoViewer").classList.remove("open");
+});
+
+// 画面を離れるときに日記の書きかけを保存
+window.addEventListener("pagehide", () => { if (diaryDirty) saveDiaryEntry(); });
+
+// ========== オフライン対応(PWA) ==========
+// https:// で開いた場合のみ有効。http:// のままでも今までどおり動作します。
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+
+// ========== 初期表示 ==========
+renderHeader();
+renderCalendar();
+renderList();
+renderDiary();
+scrollToDate(todayKey);
+</script>
+</body>
+</html>
