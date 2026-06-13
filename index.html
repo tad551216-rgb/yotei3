@@ -57,18 +57,20 @@
   .navtitle { font-size: 19px; font-weight: bold; }
 
   /* カレンダー */
-  /* カレンダー(連続スクロール) */
+  /* カレンダー(月: 連続スクロール / 週: 一覧と同じ表) */
+  #view-calendar.active { display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0; }
+  #calMonthWrap { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
   .calmonth { margin-bottom: 22px; }
   .calmonthtitle { position: sticky; top: 0; z-index: 6; background: #fff; text-align: center; font-size: 19px; font-weight: bold; padding: 6px 0; }
   .dowrow { display: grid; grid-template-columns: repeat(7,1fr); text-align: center; font-size: 14px; font-weight: bold; color: #7a8a94; margin-bottom: 4px; }
   .calgrid { display: grid; grid-template-columns: repeat(7,1fr); gap: 1px; background: var(--line); border-radius: 14px; overflow: hidden; }
-  .cell { background: #fff; min-height: 84px; padding: 4px; }
+  .cell { background: #fff; min-height: 84px; padding: 4px; min-width: 0; overflow: hidden; }
   .cell.blank { background: #F7F9FA; }
   .cell.sonwork { background: var(--son-bg); }
   .cellhead { display: flex; align-items: flex-start; justify-content: space-between; }
   .daynum { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-weight: bold; font-size: 16px; }
   .daynum.today { background: var(--ink); color: #fff !important; }
-  .calev { color: #fff; border-radius: 5px; padding: 0 4px; font-size: 12px; line-height: 19px; margin-top: 2px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .calev { color: #fff; border-radius: 5px; padding: 0 4px; font-size: 12px; line-height: 19px; margin-top: 2px; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .legend { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 16px; }
   .hint { font-size: 14px; color: #9aa7af; margin-top: 6px; }
 
@@ -118,8 +120,16 @@
   .sheethead h2 { font-size: 18px; margin: 0; }
   .x { color: #9aa7af; font-size: 18px; padding: 4px 8px; }
   .label { font-size: 14px; color: #8a979f; margin: 12px 0 4px; }
-  .dayev { display: flex; align-items: center; justify-content: space-between; color: #fff; border-radius: 12px; padding: 10px 12px; margin-bottom: 5px; font-size: 18px; font-weight: bold; }
-  .dayev .del { background: rgba(255,255,255,0.25); border-radius: 9px; padding: 5px 12px; font-size: 15px; color: #fff; }
+  .dayev { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #fff; border-radius: 12px; padding: 10px 12px; margin-bottom: 5px; font-size: 18px; font-weight: bold; }
+  /* 1日詳細モーダル */
+  .daysec { margin-bottom: 18px; }
+  .dayseclabel { font-size: 15px; font-weight: bold; margin-bottom: 6px; }
+  .daybig { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #fff; border-radius: 14px; padding: 16px 16px; margin-bottom: 6px; font-size: 22px; font-weight: bold; }
+  .daybig .del { flex-shrink: 0; background: rgba(255,255,255,0.25); border-radius: 9px; padding: 8px 14px; font-size: 15px; color: #fff; font-weight: bold; }
+  .dayempty { color: #b9c2c8; font-size: 16px; padding: 6px 2px 8px; }
+  .dayadd { display: block; width: 100%; border: 2px dashed; border-radius: 12px; padding: 12px 0; font-size: 16px; font-weight: bold; background: #fff; text-align: center; }
+  .dayev .evname { flex: 1; min-width: 0; word-break: break-word; overflow-wrap: anywhere; }
+  .dayev .del { flex-shrink: 0; background: rgba(255,255,255,0.25); border-radius: 9px; padding: 7px 14px; font-size: 15px; color: #fff; }
   .presetgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .presetgrid button { border: 2px solid; border-radius: 14px; padding: 13px 4px; font-size: 18px; font-weight: bold; }
   .freerow { display: flex; gap: 8px; }
@@ -161,10 +171,12 @@
   </nav>
 
   <main>
-    <!-- カレンダー(連続スクロール) -->
+    <!-- カレンダー(月: 連続スクロール / 日付タップで1日詳細) -->
     <section class="view" id="view-calendar">
-      <div class="legend" style="margin:0 0 8px"><span style="width:22px;height:22px;border-radius:6px;background:var(--son-bg);border:2px solid var(--son);display:inline-block"></span><span style="font-size:15px">緑色の日 = <span class="sonName">長男さん</span>の仕事の日</span></div>
-      <div id="calMonths"></div>
+      <div class="legend" style="margin:0 0 8px"><span style="width:22px;height:22px;border-radius:6px;background:var(--son-bg);border:2px solid var(--son);display:inline-block"></span><span style="font-size:15px">緑色の日 = <span class="sonName">長男さん</span>の勤務日</span></div>
+      <div id="calMonthWrap">
+        <div id="calMonths"></div>
+      </div>
       <button class="todayfab" id="goThisMonth">今月へ</button>
     </section>
 
@@ -208,6 +220,11 @@
   <div class="sheet" id="pickSheet"></div>
 </div>
 
+<!-- 1日詳細モーダル(カレンダーの日付タップで開く) -->
+<div class="overlay" id="dayOverlay">
+  <div class="sheet" id="daySheet"></div>
+</div>
+
 <!-- 設定モーダル -->
 <div class="overlay" id="settingsOverlay">
   <div class="sheet" id="settingsSheet"></div>
@@ -225,6 +242,8 @@
 // ========== 定数 ==========
 const SON_ID = "m3";
 const WORK_LABEL = "仕事";
+const DEFAULT_SHIFTS = ["日勤", "夜勤"]; // 長男さんの勤務(タップで循環)
+const SON_HEX = "#30A46C";
 const WEEK = ["日","月","火","水","木","金","土"];
 const DEFAULT_MEMBERS = [
   { id: "m1", name: "お父さん", color: "#3E7CB1" },
@@ -316,6 +335,7 @@ function fileToResizedDataUrl(file, maxSize, quality) {
 // ========== 状態 ==========
 let members = load("fam-members", DEFAULT_MEMBERS);
 let presets = load("fam-presets", DEFAULT_PRESETS);
+let shifts = load("fam-shifts", DEFAULT_SHIFTS);
 const today = new Date(); today.setHours(0, 0, 0, 0);
 const todayKey = dateKey(today);
 
@@ -363,8 +383,22 @@ function toggleSonWork(date) {
   const ym = date.slice(0, 7);
   const arr = getEvents(ym);
   const exist = arr.find(e => e.memberId === SON_ID && e.date === date);
-  if (exist) setEvents(ym, arr.filter(e => e.id !== exist.id));
-  else { arr.push({ id: uid(), date, memberId: SON_ID, title: WORK_LABEL }); setEvents(ym, arr); }
+  const list = shifts.length ? shifts : [WORK_LABEL];
+  if (!exist) {
+    // 空白 → 1つ目の勤務
+    arr.push({ id: uid(), date, memberId: SON_ID, title: list[0] });
+    setEvents(ym, arr);
+  } else {
+    const idx = list.indexOf(exist.title);
+    if (idx === -1 || idx === list.length - 1) {
+      // 最後の勤務(または不明) → 空白に戻す
+      setEvents(ym, arr.filter(e => e.id !== exist.id));
+    } else {
+      // 次の勤務へ
+      exist.title = list[idx + 1];
+      setEvents(ym, arr);
+    }
+  }
   updateDayRow(date); updateCalMonth(ym);
 }
 
@@ -409,15 +443,17 @@ function monthHTML(serial) { // serial = 年*12 + 月(0始まり)
     if (!d) return `<div class="cell blank"></div>`;
     const date = ym + "-" + pad(d);
     const dayEvents = events.filter(e => e.date === date);
-    const sonWork = dayEvents.some(e => e.memberId === SON_ID);
+    const sonEv = dayEvents.find(e => e.memberId === SON_ID);
+    const sonWork = !!sonEv;
     const isToday = date === todayKey;
     const numColor = isToday ? "#fff" : (i % 7 === 0 ? "#D1495B" : i % 7 === 6 ? "#3E7CB1" : "#22333B");
     const evHtml = dayEvents.filter(e => e.memberId !== SON_ID)
       .map(e => `<div class="calev" style="background:${memberById(e.memberId).color}">${esc(e.title)}</div>`).join("");
+    const sonHtml = sonEv ? `<div class="calev" style="background:${SON_HEX}">${esc(sonEv.title)}</div>` : "";
     return `<div class="cell${sonWork ? " sonwork" : ""}" data-date="${date}">
       <div class="cellhead">
         <div class="daynum${isToday ? " today" : ""}" style="color:${numColor}">${d}</div>
-      </div>${evHtml}</div>`;
+      </div>${sonHtml}${evHtml}</div>`;
   }).join("");
 
   const dows = WEEK.map((w, i) =>
@@ -444,7 +480,7 @@ function updateCalMonth(ym) { // 1か月分だけ差し替え(スクロール位
   el.outerHTML = monthHTML(y * 12 + (m - 1));
 }
 function scrollToMonth(ym) {
-  const box = document.getElementById("view-calendar");
+  const box = document.getElementById("calMonthWrap");
   const el = document.querySelector(`#calMonths .calmonth[data-ym="${ym}"]`);
   if (!el) return;
   const y = el.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop - 2;
@@ -453,10 +489,7 @@ function scrollToMonth(ym) {
 document.getElementById("calMonths").addEventListener("click", e => {
   const cell = e.target.closest("[data-date]");
   if (!cell) return;
-  const date = cell.dataset.date;
-  initListRange(parseDate(date));
-  pendingScrollDate = date;
-  document.querySelector('.tabs button[data-tab="list"]').click();
+  openDayModal(cell.dataset.date);
 });
 document.getElementById("goThisMonth").addEventListener("click", () => {
   const cur = today.getFullYear() * 12 + today.getMonth();
@@ -465,9 +498,9 @@ document.getElementById("goThisMonth").addEventListener("click", () => {
 });
 // スクロールで過去・未来の月を自動で継ぎ足す
 let calBusy = false;
-document.getElementById("view-calendar").addEventListener("scroll", () => {
+document.getElementById("calMonthWrap").addEventListener("scroll", () => {
   if (calBusy) return;
-  const box = document.getElementById("view-calendar");
+  const box = document.getElementById("calMonthWrap");
   if (box.scrollTop + box.clientHeight > box.scrollHeight - 1200) {
     calBusy = true;
     const from = calEndSerial;
@@ -484,6 +517,90 @@ document.getElementById("view-calendar").addEventListener("scroll", () => {
     calBusy = false;
   }
 }, { passive: true });
+
+// ===== カレンダーの日付タップ → 1日詳細モーダル =====
+let dayModalDate = null;
+function openDayModal(date) {
+  dayModalDate = date;
+  renderDayModal();
+  document.getElementById("dayOverlay").classList.add("open");
+}
+function closeDayModal() {
+  dayModalDate = null;
+  document.getElementById("dayOverlay").classList.remove("open");
+}
+function renderDayModal() {
+  if (!dayModalDate) return;
+  const date = dayModalDate;
+  const d = parseDate(date);
+  const dow = WEEK[d.getDay()];
+  const dColor = d.getDay() === 0 ? "#D1495B" : d.getDay() === 6 ? "#3E7CB1" : "#22333B";
+  const all = getEvents(date.slice(0, 7)).filter(e => e.date === date);
+  const sonEv = all.find(e => e.memberId === SON_ID);
+  const shiftList = shifts.length ? shifts : [WORK_LABEL];
+  const nextShift = sonEv
+    ? (shiftList.indexOf(sonEv.title) === shiftList.length - 1 ? "空白" : shiftList[shiftList.indexOf(sonEv.title) + 1] || "空白")
+    : shiftList[0];
+
+  let html = `
+    <div class="sheethead">
+      <h2 style="color:${dColor}">${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日(${dow})</h2>
+      <button class="x" data-act="close">✕</button>
+    </div>`;
+
+  // お父さん・お母さん
+  members.filter(m => m.id !== SON_ID).forEach(m => {
+    const evs = all.filter(e => e.memberId === m.id);
+    html += `<div class="daysec">
+      <div class="dayseclabel" style="color:${m.color}">${esc(m.name)}</div>`;
+    if (evs.length) {
+      html += evs.map(e => `<div class="daybig" style="background:${m.color}">
+        <span class="evname">${esc(e.title)}</span>
+        <button class="del" data-remove="${e.id}">削除</button></div>`).join("");
+    } else {
+      html += `<div class="dayempty">予定なし</div>`;
+    }
+    html += `<button class="dayadd" style="color:${m.color};border-color:${m.color}" data-add-member="${m.id}">＋ 予定を追加</button>
+    </div>`;
+  });
+
+  // 長男さん(勤務トグル)
+  const son = memberById(SON_ID);
+  html += `<div class="daysec">
+    <div class="dayseclabel" style="color:${SON_HEX}">${esc(son.name)}の勤務</div>`;
+  if (sonEv) {
+    html += `<div class="daybig" style="background:${SON_HEX}"><span class="evname">${esc(sonEv.title)}</span></div>`;
+  } else {
+    html += `<div class="dayempty">勤務なし</div>`;
+  }
+  html += `<button class="dayadd" style="color:${SON_HEX};border-color:${SON_HEX}" data-toggle-son="1">タップで切り替え（次は「${esc(nextShift)}」）</button>
+  </div>`;
+
+  document.getElementById("daySheet").innerHTML = html;
+}
+document.getElementById("daySheet").addEventListener("click", e => {
+  if (!dayModalDate) return;
+  const t = e.target.closest("button");
+  if (!t) return;
+  if (t.dataset.act === "close") { closeDayModal(); return; }
+  if (t.dataset.remove) {
+    const ev = getEvents(dayModalDate.slice(0, 7)).find(x => x.id === t.dataset.remove);
+    if (ev) removeEvent(ev);
+    renderDayModal(); return;
+  }
+  if (t.dataset.addMember) {
+    // 既存の予定選択モーダルを使う(閉じたら1日詳細に戻る)
+    const date = dayModalDate, mid = t.dataset.addMember;
+    closeDayModal();
+    openPick(date, mid, () => openDayModal(date));
+    return;
+  }
+  if (t.dataset.toggleSon) {
+    toggleSonWork(dayModalDate);
+    renderDayModal(); return;
+  }
+});
+document.getElementById("dayOverlay").addEventListener("click", e => { if (e.target.id === "dayOverlay") closeDayModal(); });
 
 // ========== 一覧(連続縦スクロール) ==========
 function dayRowHTML(dt, getEv) {
@@ -518,7 +635,7 @@ function dayRowHTML(dt, getEv) {
   // 長男さん(トグル)
   const sonEv = all.find(e => e.date === date && e.memberId === SON_ID);
   row += `<td class="soncell${sonEv ? " on" : ""}" data-toggle-date="${date}">
-    ${sonEv ? `<div class="workchip">仕事</div>` : `<div class="plus">—</div>`}</td></tr>`;
+    ${sonEv ? `<div class="workchip">${esc(sonEv.title)}</div>` : `<div class="plus">—</div>`}</td></tr>`;
   return row;
 }
 function rowsHTML(from, to) { // fromは含む、toは含まない
@@ -540,11 +657,10 @@ function renderList() {
   document.getElementById("listBody").innerHTML = rowsHTML(listStart, listEnd);
 }
 function updateDayRow(date) { // 1日分の行だけ差し替え(スクロール位置を保つ)
-  const tr = document.querySelector(`#listBody tr[data-date="${date}"]`);
-  if (!tr) return;
   const cache = {};
   const getEv = ym => cache[ym] || (cache[ym] = getEvents(ym));
-  tr.outerHTML = dayRowHTML(parseDate(date), getEv);
+  const tr = document.querySelector(`#listBody tr[data-date="${date}"]`);
+  if (tr) tr.outerHTML = dayRowHTML(parseDate(date), getEv);
 }
 function scrollToDate(date) {
   const box = document.getElementById("listScroll");
@@ -588,14 +704,16 @@ document.getElementById("listScroll").addEventListener("scroll", () => {
 
 
 // ========== 予定選択モーダル ==========
-function openPick(date, memberId) {
-  pickCtx = { date, memberId };
+function openPick(date, memberId, onClose) {
+  pickCtx = { date, memberId, onClose: onClose || null };
   renderPick();
   document.getElementById("pickOverlay").classList.add("open");
 }
 function closePick() {
+  const cb = pickCtx && pickCtx.onClose;
   pickCtx = null;
   document.getElementById("pickOverlay").classList.remove("open");
+  if (cb) cb();
 }
 function renderPick() {
   if (!pickCtx) return;
@@ -608,7 +726,7 @@ function renderPick() {
   document.getElementById("pickSheet").innerHTML = `
     <div class="sheethead"><h2>${esc(m.name)}の予定 ${label}</h2><button class="x" data-act="close">✕</button></div>
     ${evs.length ? `<div class="label">この日の予定</div>` +
-      evs.map(e => `<div class="dayev" style="background:${m.color}"><span>${esc(e.title)}</span>
+      evs.map(e => `<div class="dayev" style="background:${m.color}"><span class="evname">${esc(e.title)}</span>
         <button class="del" data-remove="${e.id}">削除</button></div>`).join("") : ""}
     <div class="label">リストから選んで追加</div>
     <div class="presetgrid">
@@ -649,10 +767,11 @@ document.getElementById("pickSheet").addEventListener("click", e => {
 document.getElementById("pickOverlay").addEventListener("click", e => { if (e.target.id === "pickOverlay") closePick(); });
 
 // ========== 設定モーダル ==========
-let editLists = null, editNames = null;
+let editLists = null, editNames = null, editShifts = null;
 function openSettings() {
   editNames = members.map(m => m.name);
   editLists = { m1: (presets.m1 || []).slice(), m2: (presets.m2 || []).slice() };
+  editShifts = (shifts || []).slice();
   renderSettings();
   document.getElementById("settingsOverlay").classList.add("open");
 }
@@ -681,6 +800,18 @@ function renderSettings() {
         <button class="darkbtn" style="background:${m.color}" data-add-item="${id}">追加</button>
       </div>`;
     }).join("")}
+    <div class="label" style="color:${SON_HEX};font-weight:bold;font-size:15px;margin-top:18px">${esc(editNames[members.findIndex(x => x.id === SON_ID)] || "長男さん")}の勤務(タップで順に切り替わります)</div>
+    <div class="items">
+      ${editShifts.length
+        ? editShifts.map(item => `<span class="item" style="background:${SON_HEX}">${esc(item)}
+            <button data-del-shift="${esc(item)}">✕</button></span>`).join("")
+        : `<span style="color:#c4ccd1;font-size:14px">まだ登録がありません</span>`}
+    </div>
+    <div class="freerow">
+      <input data-new-shift placeholder="例: 日勤">
+      <button class="darkbtn" style="background:${SON_HEX}" data-add-shift>追加</button>
+    </div>
+    <p style="font-size:13px;color:#9aa7af;margin:6px 0 0">空白 → ${editShifts.map(esc).join(" → ") || "(未設定)"} → 空白 の順で切り替わります。</p>
     <div class="label" style="margin-top:22px">バックアップ</div>
     <div class="freerow">
       <button class="darkbtn" style="flex:1" data-act="export">書き出す(保存)</button>
@@ -707,13 +838,25 @@ document.getElementById("settingsSheet").addEventListener("click", e => {
     if (v && !editLists[id].includes(v)) { editLists[id].push(v); renderSettings(); }
     return;
   }
+  if (t.dataset.delShift !== undefined && t.hasAttribute("data-del-shift")) {
+    editShifts = editShifts.filter(x => x !== t.dataset.delShift);
+    renderSettings(); return;
+  }
+  if (t.hasAttribute("data-add-shift")) {
+    const inp = document.querySelector("#settingsSheet [data-new-shift]");
+    const v = inp.value.trim();
+    if (v && !editShifts.includes(v)) { editShifts.push(v); renderSettings(); }
+    return;
+  }
   if (t.dataset.act === "export") { exportBackup(); return; }
   if (t.dataset.act === "import") { document.getElementById("importFile").click(); return; }
   if (t.dataset.act === "save") {
     members = members.map((m, i) => ({ ...m, name: (editNames[i] || "").trim() || m.name }));
     presets = editLists;
+    shifts = editShifts.length ? editShifts : [WORK_LABEL];
     save("fam-members", members);
     save("fam-presets", presets);
+    save("fam-shifts", shifts);
     renderHeader(); renderList(); renderCalendar();
     closeSettings(); return;
   }
@@ -819,6 +962,7 @@ async function importBackup(file) {
   // 画面を読み直し
   members = load("fam-members", DEFAULT_MEMBERS);
   presets = load("fam-presets", DEFAULT_PRESETS);
+  shifts = load("fam-shifts", DEFAULT_SHIFTS);
   Object.keys(photoCache).forEach(k => { delete photoCache[k]; });
   renderHeader(); renderCalendar(); renderList(); renderDiary();
   closeSettings();
