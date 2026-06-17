@@ -242,7 +242,7 @@
 // ========== 定数 ==========
 const SON_ID = "m3";
 const WORK_LABEL = "仕事";
-const DEFAULT_SHIFTS = ["日勤", "夜勤"]; // 長男さんの勤務(タップで循環)
+const DEFAULT_SHIFTS = ["午後", "日勤"]; // 長男さんの勤務(タップで循環)
 const SON_HEX = "#30A46C";
 const WEEK = ["日","月","火","水","木","金","土"];
 const DEFAULT_MEMBERS = [
@@ -250,7 +250,7 @@ const DEFAULT_MEMBERS = [
   { id: "m2", name: "お母さん", color: "#D1495B" },
   { id: "m3", name: "長男さん", color: "#30A46C" },
 ];
-const DEFAULT_PRESETS = { m1: ["ゴルフ","病院","会合"], m2: ["パート","病院","買い物"] };
+const DEFAULT_PRESETS = { m1: ["病院","歯医者","旅行","温泉","Web会議"], m2: ["病院","美容室","旅行","温泉","お買い物"] };
 
 // ========== 保存(本文はlocalStorage、写真はIndexedDB) ==========
 function load(key, fallback) {
