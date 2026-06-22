@@ -230,6 +230,11 @@
   <div class="sheet" id="settingsSheet"></div>
 </div>
 
+<!-- 予定共有モーダル(LINEなど) -->
+<div class="overlay" id="shareOverlay">
+  <div class="sheet" id="shareSheet"></div>
+</div>
+
 <!-- 写真の拡大表示 -->
 <div id="photoViewer">
   <img id="photoViewerImg" alt="拡大した日記の写真">
@@ -812,6 +817,13 @@ function renderSettings() {
       <button class="darkbtn" style="background:${SON_HEX}" data-add-shift>追加</button>
     </div>
     <p style="font-size:13px;color:#9aa7af;margin:6px 0 0">空白 → ${editShifts.map(esc).join(" → ") || "(未設定)"} → 空白 の順で切り替わります。</p>
+    <div class="label" style="margin-top:22px">家族と予定を共有(LINEなど)</div>
+    <div class="freerow">
+      <button class="darkbtn" style="flex:1;background:#30A46C" data-act="share-export">予定をテキストで書き出す</button>
+      <button class="darkbtn" style="flex:1;background:#30A46C" data-act="share-import">予定を貼り付けて取り込む</button>
+    </div>
+    <p style="font-size:13px;color:#9aa7af;margin:6px 0 0">今日以降の予定を文字にしてLINE等で送れます。受け取った文字を貼り付けると、同じ名前の人の予定として取り込めます(自分の予定はそのまま残ります)。</p>
+
     <div class="label" style="margin-top:22px">バックアップ</div>
     <div class="freerow">
       <button class="darkbtn" style="flex:1" data-act="export">書き出す(保存)</button>
@@ -850,6 +862,8 @@ document.getElementById("settingsSheet").addEventListener("click", e => {
   }
   if (t.dataset.act === "export") { exportBackup(); return; }
   if (t.dataset.act === "import") { document.getElementById("importFile").click(); return; }
+  if (t.dataset.act === "share-export") { openShareExport(); return; }
+  if (t.dataset.act === "share-import") { openShareImport(); return; }
   if (t.dataset.act === "save") {
     members = members.map((m, i) => ({ ...m, name: (editNames[i] || "").trim() || m.name }));
     presets = editLists;
@@ -976,6 +990,122 @@ document.getElementById("settingsSheet").addEventListener("change", e => {
     if (f) importBackup(f);
   }
 });
+
+// ========== 予定をテキストで共有(LINEなど) ==========
+const SHARE_HEADER = "#わが家の予定板 共有データ v1";
+// 自分の今日以降の予定をすべてのメンバーぶん集める
+function collectFutureEvents() {
+  const result = [];
+  // 今月から先12か月ぶんを走査(月キーをまたいで集める)
+  const base = new Date(today.getFullYear(), today.getMonth(), 1);
+  for (let i = 0; i < 14; i++) {
+    const d = new Date(base.getFullYear(), base.getMonth() + i, 1);
+    const ym = ymKey(d.getFullYear(), d.getMonth());
+    const arr = getEvents(ym);
+    arr.forEach(e => { if (e.date >= todayKey) result.push(e); });
+  }
+  return result;
+}
+function openShareExport() {
+  const evs = collectFutureEvents().sort((a, b) => (a.date + a.memberId).localeCompare(b.date + b.memberId));
+  // 形式: 1行1予定  日付<TAB>メンバー名<TAB>内容
+  const lines = evs.map(e => `${e.date}\t${memberById(e.memberId).name}\t${e.title}`);
+  const text = [SHARE_HEADER, ...lines].join("\n");
+  const count = evs.length;
+  document.getElementById("shareSheet").innerHTML = `
+    <div class="sheethead"><h2>予定をテキストで書き出す</h2><button class="x" data-act="close">✕</button></div>
+    <p style="font-size:14px;color:#8a979f;margin:0 0 8px">今日(${todayKey})以降の予定 ${count}件です。下の文をコピーして、LINEなどで家族に送ってください。</p>
+    <textarea id="shareOutText" rows="9" readonly style="width:100%;border:2px solid var(--line);border-radius:14px;padding:12px;font-size:15px;line-height:1.5">${esc(text)}</textarea>
+    <button class="fullbtn" data-act="copy" style="background:#30A46C;margin-top:10px">コピーする</button>
+    <p style="font-size:13px;color:#9aa7af;margin:8px 0 0">コピーがうまくいかないときは、上の文を長押しして全選択→コピーしてください。</p>`;
+  document.getElementById("shareOverlay").classList.add("open");
+}
+function openShareImport() {
+  document.getElementById("shareSheet").innerHTML = `
+    <div class="sheethead"><h2>予定を貼り付けて取り込む</h2><button class="x" data-act="close">✕</button></div>
+    <p style="font-size:14px;color:#8a979f;margin:0 0 8px">家族から届いた予定の文を、下の欄に貼り付けて「取り込む」を押してください。今日以降の予定だけが、同じ名前の人に追加されます(自分の予定は消えません)。</p>
+    <textarea id="shareInText" rows="9" placeholder="ここに貼り付け…" style="width:100%;border:2px solid var(--line);border-radius:14px;padding:12px;font-size:15px;line-height:1.5"></textarea>
+    <button class="fullbtn" data-act="do-import" style="background:#30A46C;margin-top:10px">取り込む</button>`;
+  document.getElementById("shareOverlay").classList.add("open");
+}
+function closeShare() { document.getElementById("shareOverlay").classList.remove("open"); }
+
+function doShareImport(text) {
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length);
+  if (!lines.length || lines[0].indexOf("わが家の予定板") === -1) {
+    // ヘッダーが無くても、データ行があれば許容する
+    if (!lines.some(l => l.split("\t").length >= 3)) {
+      alert("予定の文が正しく読み取れませんでした。届いた文を全部コピーして貼り付けてください。");
+      return;
+    }
+  }
+  // 名前→memberId の対応
+  const nameToId = {};
+  members.forEach(m => { nameToId[m.name] = m.id; });
+
+  let added = 0, skippedPast = 0, skippedNoMember = 0, skippedDup = 0;
+  const byYm = {}; // ym -> events配列(まとめて保存)
+  function ev(ym) { return byYm[ym] || (byYm[ym] = getEvents(ym)); }
+
+  lines.forEach(line => {
+    if (line.indexOf("わが家の予定板") !== -1) return; // ヘッダー行
+    const parts = line.split("\t");
+    if (parts.length < 3) return;
+    const date = parts[0].trim();
+    const name = parts[1].trim();
+    const title = parts.slice(2).join("\t").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !title) return;
+    if (date < todayKey) { skippedPast++; return; }           // 今日より前は取り込まない
+    const mid = nameToId[name];
+    if (!mid) { skippedNoMember++; return; }                   // 同じ名前の人がいない
+    const ym = date.slice(0, 7);
+    const arr = ev(ym);
+    // 重複(同じ日・同じ人・同じ内容)はスキップ
+    if (arr.some(e => e.date === date && e.memberId === mid && e.title === title)) { skippedDup++; return; }
+    arr.push({ id: uid(), date, memberId: mid, title });
+    added++;
+  });
+
+  Object.keys(byYm).forEach(ym => setEvents(ym, byYm[ym]));
+
+  // 画面更新
+  renderList(); renderCalendar();
+  closeShare();
+
+  let msg = `${added}件の予定を取り込みました。`;
+  const notes = [];
+  if (skippedDup) notes.push(`すでに同じ予定 ${skippedDup}件`);
+  if (skippedPast) notes.push(`過去の予定 ${skippedPast}件`);
+  if (skippedNoMember) notes.push(`名前が一致しない予定 ${skippedNoMember}件`);
+  if (notes.length) msg += "\n(取り込まなかったもの: " + notes.join(" / ") + ")";
+  if (skippedNoMember) msg += "\n※名前が一致しない場合は、設定で名前をそろえると取り込めます。";
+  alert(msg);
+}
+
+document.getElementById("shareSheet").addEventListener("click", async e => {
+  const t = e.target.closest("button"); if (!t) return;
+  if (t.dataset.act === "close") { closeShare(); return; }
+  if (t.dataset.act === "copy") {
+    const ta = document.getElementById("shareOutText");
+    try {
+      await navigator.clipboard.writeText(ta.value);
+      t.textContent = "コピーしました ✓";
+      setTimeout(() => { t.textContent = "コピーする"; }, 1500);
+    } catch (err) {
+      ta.focus(); ta.select();
+      try { document.execCommand("copy"); t.textContent = "コピーしました ✓"; setTimeout(() => { t.textContent = "コピーする"; }, 1500); }
+      catch (e2) { alert("自動コピーできませんでした。上の文を長押しして選択→コピーしてください。"); }
+    }
+    return;
+  }
+  if (t.dataset.act === "do-import") {
+    const ta = document.getElementById("shareInText");
+    if (!ta.value.trim()) { alert("貼り付けてから「取り込む」を押してください。"); return; }
+    doShareImport(ta.value);
+    return;
+  }
+});
+document.getElementById("shareOverlay").addEventListener("click", e => { if (e.target.id === "shareOverlay") closeShare(); });
 
 // ========== 日記 ==========
 function diaryEntry(date) {
