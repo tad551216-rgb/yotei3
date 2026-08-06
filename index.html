@@ -155,6 +155,73 @@
 </style>
 </head>
 <body>
+
+<div id="ttDispFab" style="position:fixed;right:14px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:99999;">
+  <button id="ttDispBtn" type="button" aria-label="表示設定（文字の大きさ）" style="width:46px;height:46px;border-radius:50%;background:#2c5077;color:#fff;border:none;box-shadow:0 2px 8px rgba(0,0,0,.3);font-size:15px;font-weight:700;font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans',sans-serif;">Aa</button>
+</div>
+<dialog id="ttDispDlg" style="border:none;border-radius:14px;padding:0;max-width:320px;width:88vw;">
+  <form method="dialog" style="padding:16px;font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans',sans-serif;">
+    <h3 style="margin:0 0 8px;font-size:16px;color:#2c5077;">表示設定</h3>
+    <p style="margin:0 0 12px;font-size:13px;color:#777;line-height:1.5;">文字が小さくて読みにくいときに、大きさと太さを調整できます。設定はこの端末に自動で保存されます。</p>
+    <label style="font-size:13px;color:#2c5077;font-weight:600;display:block;margin-bottom:4px;">文字の大きさ：<span id="ttScaleLabel">100%</span></label>
+    <input type="range" id="ttScale" min="100" max="170" step="10" value="100" style="width:100%;accent-color:#2c5077;">
+    <div style="display:flex;gap:8px;margin:14px 0 4px;">
+      <button type="button" id="ttWNormal" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid #2c5077;background:#2c5077;color:#fff;font-size:13px;">標準</button>
+      <button type="button" id="ttWBold" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid #2c5077;background:#fff;color:#2c5077;font-size:13px;">太字</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px;">
+      <button type="button" id="ttReset" style="flex:1;padding:9px;border-radius:8px;border:1.5px solid #c9472e;background:#fff;color:#c9472e;font-size:13px;">初期設定に戻す</button>
+      <button value="close" style="flex:1;padding:9px;border-radius:8px;border:none;background:#2c5077;color:#fff;font-size:13px;">閉じる</button>
+    </div>
+  </form>
+</dialog>
+<script>(function(){
+  var DK='omukae-display-v1';
+  function ld(){
+    var s={};
+    try{ s = JSON.parse(localStorage.getItem(DK)) || {}; }catch(e){}
+    if(!s.scale) s.scale = 100;
+    if(!s.weight) s.weight = 400;
+    if(!s.device) s.device = 'phone';
+    return s;
+  }
+  function sv(s){ try{ localStorage.setItem(DK, JSON.stringify(s)); }catch(e){} }
+  var st = ld();
+  function apply(){
+    document.body.style.zoom = (st.scale/100);
+    document.body.style.fontWeight = st.weight;
+  }
+  function render(){
+    document.getElementById('ttScale').value = st.scale;
+    document.getElementById('ttScaleLabel').textContent = st.scale+'%';
+    var bn=document.getElementById('ttWNormal'), bb=document.getElementById('ttWBold');
+    if(st.weight===600){
+      bb.style.background='#2c5077'; bb.style.color='#fff';
+      bn.style.background='#fff'; bn.style.color='#2c5077';
+    }else{
+      bn.style.background='#2c5077'; bn.style.color='#fff';
+      bb.style.background='#fff'; bb.style.color='#2c5077';
+    }
+  }
+  apply(); /* ちらつき防止のため即時反映 */
+  document.getElementById('ttDispBtn').addEventListener('click', function(){
+    render();
+    document.getElementById('ttDispDlg').showModal();
+  });
+  document.getElementById('ttScale').addEventListener('input', function(e){
+    st.scale = parseInt(e.target.value,10) || 100;
+    document.getElementById('ttScaleLabel').textContent = st.scale+'%';
+    apply();
+  });
+  document.getElementById('ttScale').addEventListener('change', function(){ sv(st); });
+  document.getElementById('ttWNormal').addEventListener('click', function(){ st.weight=400; sv(st); apply(); render(); });
+  document.getElementById('ttWBold').addEventListener('click', function(){ st.weight=600; sv(st); apply(); render(); });
+  document.getElementById('ttReset').addEventListener('click', function(){
+    st = {device:st.device, scale:100, weight:400};
+    sv(st); apply(); render();
+  });
+})();</script>
+
 <div class="wrap">
   <header>
     <div>
