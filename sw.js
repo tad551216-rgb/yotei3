@@ -1,7 +1,12 @@
+/* つくる手帖 ── キャッシュはオリジン単位で共有されます。
+   github.io は全リポジトリが同じオリジンなので、
+   自分の名前空間（TT_NS）のものだけを消します。 */
 // わが家の予定板 - オフライン対応サービスワーカー
 // 一度開けば、以後はサーバーに繋がらなくても起動できます。
 // 画面はまずキャッシュから表示し、裏で新しい版を取得して次回に反映します。
-const CACHE = "wagaya-v2";
+const TT_NS = 'tt:yotei3:';
+const TT_OLD = 'wagaya-v2';   /* 旧名。次の更新のときに消して構いません */
+const CACHE = TT_NS + 'v2';
 const ASSETS = [
   "./",
   "./index.html",
@@ -20,7 +25,7 @@ self.addEventListener("install", (e) => {
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter(k => (k.startsWith(TT_NS) || k === TT_OLD) && k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
