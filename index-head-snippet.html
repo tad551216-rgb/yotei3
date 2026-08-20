@@ -1,0 +1,18 @@
+<!-- ① index.html の <head> 内、</head> の直前に追加 -->
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<meta name="theme-color" content="#22333B">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="予定板">
+
+
+<!-- ② index.html の </body> の直前に追加（既に登録済みなら不要） -->
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('./sw.js', { scope: './' })
+        .catch(function (e) { console.warn('SW register failed', e); });
+    });
+  }
+</script>
