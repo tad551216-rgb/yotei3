@@ -170,6 +170,14 @@
   .items { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 8px; }
   .item { color: #fff; border-radius: 999px; padding: 6px 12px; font-size: 16px; display: inline-flex; align-items: center; gap: 6px; }
   .item button { background: rgba(255,255,255,0.3); width: 20px; height: 20px; border-radius: 50%; color: #fff; font-size: 12px; line-height: 20px; }
+  .dispcard { background: #F5F8FA; border-radius: 14px; padding: 12px 14px 14px; margin-bottom: 6px; }
+  .disphint { font-size: 13px; color: #8a979f; margin: 0 0 10px; line-height: 1.5; }
+  .displabel { font-size: 15px; font-weight: bold; display: block; margin-bottom: 4px; }
+  .dispcard input[type=range] { width: 100%; accent-color: var(--ink); }
+  .disprow { display: flex; gap: 8px; margin-top: 12px; }
+  .disprow button { flex: 1; border: 2px solid var(--ink); border-radius: 12px; padding: 10px 0; font-size: 15px; font-weight: bold; background: #fff; color: var(--ink); }
+  .disprow button[data-tt="reset"] { border-color: #C9472E; color: #C9472E; }
+
   .fullbtn { display: block; width: 100%; background: var(--ink); color: #fff; border-radius: 14px; padding: 13px 0; font-size: 17px; font-weight: bold; margin-top: 20px; }
 
   /* 写真の拡大 */
@@ -181,71 +189,57 @@
 </head>
 <body>
 
-<div id="ttDispFab" style="position:fixed;right:14px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:99999;">
-  <button id="ttDispBtn" type="button" aria-label="表示設定（文字の大きさ）" style="width:46px;height:46px;border-radius:50%;background:#2c5077;color:#fff;border:none;box-shadow:0 2px 8px rgba(0,0,0,.3);font-size:15px;font-weight:700;font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans',sans-serif;">Aa</button>
-</div>
-<dialog id="ttDispDlg" style="border:none;border-radius:14px;padding:0;max-width:320px;width:88vw;">
-  <form method="dialog" style="padding:16px;font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans',sans-serif;">
-    <h3 style="margin:0 0 8px;font-size:16px;color:#2c5077;">表示設定</h3>
-    <p style="margin:0 0 12px;font-size:13px;color:#777;line-height:1.5;">文字が小さくて読みにくいときに、大きさと太さを調整できます。設定はこの端末に自動で保存されます。</p>
-    <label style="font-size:13px;color:#2c5077;font-weight:600;display:block;margin-bottom:4px;">文字の大きさ：<span id="ttScaleLabel">100%</span></label>
-    <input type="range" id="ttScale" min="100" max="170" step="10" value="100" style="width:100%;accent-color:#2c5077;">
-    <div style="display:flex;gap:8px;margin:14px 0 4px;">
-      <button type="button" id="ttWNormal" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid #2c5077;background:#2c5077;color:#fff;font-size:13px;">標準</button>
-      <button type="button" id="ttWBold" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid #2c5077;background:#fff;color:#2c5077;font-size:13px;">太字</button>
-    </div>
-    <div style="display:flex;gap:8px;margin-top:16px;">
-      <button type="button" id="ttReset" style="flex:1;padding:9px;border-radius:8px;border:1.5px solid #c9472e;background:#fff;color:#c9472e;font-size:13px;">初期設定に戻す</button>
-      <button value="close" style="flex:1;padding:9px;border-radius:8px;border:none;background:#2c5077;color:#fff;font-size:13px;">閉じる</button>
-    </div>
-  </form>
-</dialog>
-<script>(function(){
-  var DK='omukae-display-v1';
-  function ld(){
-    var s={};
-    try{ s = JSON.parse(localStorage.getItem(DK)) || {}; }catch(e){}
-    if(!s.scale) s.scale = 100;
-    if(!s.weight) s.weight = 400;
-    if(!s.device) s.device = 'phone';
+<script>
+/* 表示設定(文字の大きさ・太さ) — 設定画面の中にカードとして表示します */
+var TTDisp = (function () {
+  var DK = 'omukae-display-v1';
+  function ld() {
+    var s = {};
+    try { s = JSON.parse(localStorage.getItem(DK)) || {}; } catch (e) {}
+    if (!s.scale) s.scale = 100;
+    if (!s.weight) s.weight = 400;
+    if (!s.device) s.device = 'phone';
     return s;
   }
-  function sv(s){ try{ localStorage.setItem(DK, JSON.stringify(s)); }catch(e){} }
+  function sv() { try { localStorage.setItem(DK, JSON.stringify(st)); } catch (e) {} }
   var st = ld();
-  function apply(){
-    document.body.style.zoom = (st.scale/100);
+  function apply() {
+    document.body.style.zoom = (st.scale / 100);
     document.body.style.fontWeight = st.weight;
   }
-  function render(){
-    document.getElementById('ttScale').value = st.scale;
-    document.getElementById('ttScaleLabel').textContent = st.scale+'%';
-    var bn=document.getElementById('ttWNormal'), bb=document.getElementById('ttWBold');
-    if(st.weight===600){
-      bb.style.background='#2c5077'; bb.style.color='#fff';
-      bn.style.background='#fff'; bn.style.color='#2c5077';
-    }else{
-      bn.style.background='#2c5077'; bn.style.color='#fff';
-      bb.style.background='#fff'; bb.style.color='#2c5077';
-    }
-  }
   apply(); /* ちらつき防止のため即時反映 */
-  document.getElementById('ttDispBtn').addEventListener('click', function(){
-    render();
-    document.getElementById('ttDispDlg').showModal();
-  });
-  document.getElementById('ttScale').addEventListener('input', function(e){
-    st.scale = parseInt(e.target.value,10) || 100;
-    document.getElementById('ttScaleLabel').textContent = st.scale+'%';
-    apply();
-  });
-  document.getElementById('ttScale').addEventListener('change', function(){ sv(st); });
-  document.getElementById('ttWNormal').addEventListener('click', function(){ st.weight=400; sv(st); apply(); render(); });
-  document.getElementById('ttWBold').addEventListener('click', function(){ st.weight=600; sv(st); apply(); render(); });
-  document.getElementById('ttReset').addEventListener('click', function(){
-    st = {device:st.device, scale:100, weight:400};
-    sv(st); apply(); render();
-  });
-})();</script>
+  return {
+    apply: apply,
+    setScale: function (v) { st.scale = parseInt(v, 10) || 100; apply(); this.sync(); },
+    save: sv,
+    setWeight: function (w) { st.weight = w; sv(); apply(); this.sync(); },
+    reset: function () { st = { device: st.device, scale: 100, weight: 400 }; sv(); apply(); this.sync(); },
+    cardHTML: function () {
+      return '' +
+        '<div class="dispcard">' +
+        '<div class="label" style="margin-top:0">文字の大きさ・太さ</div>' +
+        '<p class="disphint">文字が小さくて読みにくいときに調整できます。この端末に自動で保存されます。</p>' +
+        '<label class="displabel">大きさ：<span id="ttScaleLabel">' + st.scale + '%</span></label>' +
+        '<input type="range" id="ttScale" min="100" max="170" step="10" value="' + st.scale + '">' +
+        '<div class="disprow">' +
+        '<button type="button" data-tt="normal" id="ttWNormal">標準</button>' +
+        '<button type="button" data-tt="bold" id="ttWBold">太字</button>' +
+        '<button type="button" data-tt="reset" id="ttReset">元に戻す</button>' +
+        '</div></div>';
+    },
+    sync: function () {
+      var sl = document.getElementById('ttScale');
+      if (!sl) return;
+      sl.value = st.scale;
+      document.getElementById('ttScaleLabel').textContent = st.scale + '%';
+      var bn = document.getElementById('ttWNormal'), bb = document.getElementById('ttWBold');
+      var on = 'background:#22333B;color:#fff', off = 'background:#fff;color:#22333B';
+      bn.style.cssText = (st.weight === 600 ? off : on);
+      bb.style.cssText = (st.weight === 600 ? on : off);
+    }
+  };
+})();
+</script>
 
 <div class="wrap">
   <header>
@@ -1017,6 +1011,7 @@ function renderSettings() {
   const sheet = document.getElementById("settingsSheet");
   sheet.innerHTML = `
     <div class="sheethead"><h2>設定</h2><button class="x" data-act="close">✕</button></div>
+    ${TTDisp.cardHTML()}
     <div class="label">3人の名前</div>
     ${members.map((m, i) => `
       <div class="namerow"><span class="dot" style="background:${m.color}"></span>
@@ -1064,6 +1059,7 @@ function renderSettings() {
     <input type="file" accept=".json,application/json" id="importFile" style="display:none">
     <p style="font-size:13px;color:#9aa7af;margin:6px 0 0">予定・日記・写真をすべて1つのファイルに保存し、後から元に戻せます。</p>
     <button class="fullbtn" data-act="save">保存する</button>`;
+  TTDisp.sync();
 }
 document.getElementById("settingsSheet").addEventListener("click", e => {
   const t = e.target.closest("button");
@@ -1092,6 +1088,9 @@ document.getElementById("settingsSheet").addEventListener("click", e => {
     if (v && !editShifts.includes(v)) { editShifts.push(v); renderSettings(); }
     return;
   }
+  if (t.dataset.tt === "normal") { TTDisp.setWeight(400); return; }
+  if (t.dataset.tt === "bold") { TTDisp.setWeight(600); return; }
+  if (t.dataset.tt === "reset") { TTDisp.reset(); return; }
   if (t.dataset.act === "export") { exportBackup(); return; }
   if (t.dataset.act === "import") { document.getElementById("importFile").click(); return; }
   if (t.dataset.act === "share-export") { openShareExport(); return; }
@@ -1215,7 +1214,11 @@ async function importBackup(file) {
   alert("バックアップから復元しました。");
 }
 
+document.getElementById("settingsSheet").addEventListener("input", e => {
+  if (e.target.id === "ttScale") TTDisp.setScale(e.target.value);
+});
 document.getElementById("settingsSheet").addEventListener("change", e => {
+  if (e.target.id === "ttScale") { TTDisp.save(); return; }
   if (e.target.id === "importFile") {
     const f = e.target.files && e.target.files[0];
     e.target.value = "";
