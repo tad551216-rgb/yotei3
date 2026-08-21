@@ -97,6 +97,28 @@
   .workchip { background: var(--son); color: #fff; border-radius: 10px; padding: 9px 0; font-size: 19px; font-weight: bold; text-align: center; }
   td.soncell.on { background: var(--son-bg); }
 
+  /* 一覧の複数日選択 */
+  td.datecell { position: relative; }
+  .selmark { position: absolute; top: 5px; left: 4px; width: 20px; height: 20px; border-radius: 50%;
+    background: var(--ink); color: #fff; font-size: 13px; line-height: 20px; text-align: center; font-weight: bold; }
+  tbody tr.sel td { background: #FFF0C2 !important; }
+  tbody tr.sel td.datecell { box-shadow: inset 5px 0 0 var(--ink); }
+  th.datecol .subhint { font-size: 11px; color: #b3bdc4; font-weight: normal; display: block; line-height: 1.2; }
+  #selBar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 45; display: none;
+    align-items: center; justify-content: space-between; gap: 8px;
+    background: var(--ink); color: #fff; padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+    box-shadow: 0 -3px 12px rgba(0,0,0,0.25); }
+  #selBar .cnt { font-size: 17px; font-weight: bold; }
+  #selBar button { border-radius: 12px; padding: 11px 14px; font-size: 16px; font-weight: bold; }
+  #selBar .go { background: #fff; color: var(--ink); }
+  #selBar .clr { background: rgba(255,255,255,0.22); color: #fff; }
+  body.selmode .todayfab { display: none; }
+  .datechips { display: flex; flex-wrap: wrap; gap: 5px; max-height: 116px; overflow-y: auto; }
+  .datechip { background: #EEF2F5; color: var(--ink); border-radius: 999px; padding: 5px 11px; font-size: 15px; }
+  .memrow { display: flex; gap: 6px; }
+  .memrow button { flex: 1; border: 2px solid; border-radius: 12px; padding: 11px 0; font-size: 16px; font-weight: bold; background: #fff; }
+  .bulkmsg { background: #E8F6EE; color: #1E7A4C; border-radius: 12px; padding: 10px 12px; font-size: 15px; font-weight: bold; margin-top: 12px; }
+
   /* 日記 */
   textarea { width: 100%; border: 2px solid var(--line); border-radius: 14px; padding: 12px; font-size: 18px; line-height: 1.7; resize: vertical; }
   .diaryrow { display: flex; gap: 8px; margin-top: 10px; }
@@ -285,6 +307,20 @@
   </main>
 </div>
 
+<!-- 一覧の複数日選択バー -->
+<div id="selBar">
+  <span class="cnt" id="selCount"></span>
+  <span style="display:flex;gap:8px;flex-shrink:0">
+    <button class="clr" id="selClear">解除</button>
+    <button class="go" id="selAdd">まとめて追加</button>
+  </span>
+</div>
+
+<!-- まとめて予定を追加モーダル -->
+<div class="overlay" id="bulkOverlay">
+  <div class="sheet" id="bulkSheet"></div>
+</div>
+
 <!-- 予定選択モーダル -->
 <div class="overlay" id="pickOverlay">
   <div class="sheet" id="pickSheet"></div>
@@ -433,6 +469,9 @@ initListRange(today);
 let diaryDate = todayKey;
 let diaryDirty = false;
 let pickCtx = null; // {date, memberId}
+const selDates = new Set(); // 一覧で選択中の日付(複数)
+let bulkMember = "m1";      // まとめて追加する相手
+let bulkMsg = "";           // まとめて追加の結果メッセージ
 const photoCache = {};
 
 const memberById = id => members.find(m => m.id === id) || members[0];
@@ -693,8 +732,10 @@ function dayRowHTML(dt, getEv) {
     ? `<span class="mnum">${dt.getMonth() + 1}/${dt.getDate()}</span>`
     : dt.getDate();
 
-  let row = `<tr data-date="${date}" style="background:${rowBg}">
-    <td class="datecell" style="color:${dColor}">
+  const isSel = selDates.has(date);
+  let row = `<tr data-date="${date}"${isSel ? ' class="sel"' : ""} style="background:${rowBg}">
+    <td class="datecell" data-sel-date="${date}" style="color:${dColor}">
+      ${isSel ? `<div class="selmark">✓</div>` : ""}
       <div class="num">${numHtml}</div><div class="dow">(${WEEK[dow]})</div>
     </td>`;
 
@@ -727,7 +768,7 @@ function rowsHTML(from, to) { // fromは含む、toは含まない
 }
 function renderList() {
   document.getElementById("listHead").innerHTML =
-    `<th class="datecol">日付</th>` +
+    `<th class="datecol">日付<span class="subhint">タップで選択</span></th>` +
     members.map(m => `<th style="background:${m.color}">${esc(m.name)}</th>`).join("");
   document.getElementById("listBody").innerHTML = rowsHTML(listStart, listEnd);
 }
@@ -745,6 +786,8 @@ function scrollToDate(date) {
   box.scrollTop = Math.max(0, y);
 }
 document.getElementById("listBody").addEventListener("click", e => {
+  const sel = e.target.closest("[data-sel-date]");
+  if (sel) { toggleSelDate(sel.dataset.selDate); return; }
   const pick = e.target.closest("[data-pick-date]");
   if (pick) { openPick(pick.dataset.pickDate, pick.dataset.pickMember); return; }
   const tog = e.target.closest("[data-toggle-date]");
@@ -777,6 +820,125 @@ document.getElementById("listScroll").addEventListener("scroll", () => {
   }
 }, { passive: true });
 
+
+// ========== 複数日の選択 → まとめて予定を追加 ==========
+function toggleSelDate(date) {
+  if (selDates.has(date)) selDates.delete(date); else selDates.add(date);
+  updateDayRow(date);
+  updateSelBar();
+}
+function clearSelDates() {
+  const arr = Array.from(selDates);
+  selDates.clear();
+  arr.forEach(updateDayRow);
+  updateSelBar();
+}
+function updateSelBar() {
+  const n = selDates.size;
+  const onList = document.getElementById("view-list").classList.contains("active");
+  const show = n > 0 && onList;
+  document.getElementById("selBar").style.display = show ? "flex" : "none";
+  document.body.classList.toggle("selmode", show);
+  if (n) document.getElementById("selCount").textContent = n + "日を選択中";
+}
+document.getElementById("selClear").addEventListener("click", clearSelDates);
+document.getElementById("selAdd").addEventListener("click", () => openBulk());
+// タブを切り替えたら選択バーの表示も合わせる
+document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", updateSelBar));
+
+function bulkAddEvents(memberId, title) {
+  const dates = Array.from(selDates).sort();
+  const byYm = {};
+  dates.forEach(d => { const ym = d.slice(0, 7); if (!byYm[ym]) byYm[ym] = []; byYm[ym].push(d); });
+  let added = 0;
+  Object.keys(byYm).forEach(ym => {
+    const arr = getEvents(ym);
+    byYm[ym].forEach(date => {
+      if (memberId === SON_ID) {
+        // 勤務は1日ひとつ。すでに入っていれば置き換える
+        const i = arr.findIndex(e => e.memberId === SON_ID && e.date === date);
+        if (i !== -1) arr.splice(i, 1);
+        arr.push({ id: uid(), date, memberId, title });
+        added++;
+      } else {
+        // 同じ日に同じ予定が二重にならないようにする
+        if (arr.some(e => e.date === date && e.memberId === memberId && e.title === title)) return;
+        arr.push({ id: uid(), date, memberId, title });
+        added++;
+      }
+    });
+    setEvents(ym, arr);
+    updateCalMonth(ym);
+  });
+  dates.forEach(updateDayRow);
+  bulkMsg = added
+    ? `${added}日に「${title}」を追加しました。`
+    : `すでに全部の日に「${title}」が入っています。`;
+  renderBulk();
+}
+function openBulk() {
+  if (!selDates.size) return;
+  bulkMsg = "";
+  renderBulk();
+  document.getElementById("bulkOverlay").classList.add("open");
+}
+function closeBulk() {
+  bulkMsg = "";
+  document.getElementById("bulkOverlay").classList.remove("open");
+}
+function renderBulk() {
+  const dates = Array.from(selDates).sort();
+  const m = memberById(bulkMember);
+  const isSon = bulkMember === SON_ID;
+  const list = isSon ? (shifts.length ? shifts : [WORK_LABEL]) : (presets[bulkMember] || []);
+  const chips = dates.map(d => {
+    const dt = parseDate(d);
+    return `<span class="datechip">${dt.getMonth() + 1}/${dt.getDate()}(${WEEK[dt.getDay()]})</span>`;
+  }).join("");
+
+  document.getElementById("bulkSheet").innerHTML = `
+    <div class="sheethead"><h2>${dates.length}日にまとめて追加</h2><button class="x" data-act="close">✕</button></div>
+    <div class="label">選んだ日</div>
+    <div class="datechips">${chips}</div>
+    <div class="label">だれの予定にしますか</div>
+    <div class="memrow">
+      ${members.map(x => `<button data-mem="${x.id}"
+        style="border-color:${x.color};${x.id === bulkMember ? `background:${x.color};color:#fff` : `color:${x.color}`}">${esc(x.name)}</button>`).join("")}
+    </div>
+    <div class="label">${isSon ? "勤務を選んで追加" : "リストから選んで追加"}</div>
+    <div class="presetgrid">
+      ${list.length
+        ? list.map(p => `<button style="border-color:${m.color};color:${m.color}" data-preset="${esc(p)}">${esc(p)}</button>`).join("")
+        : `<p style="grid-column:1/3;color:#9aa7af;font-size:15px;margin:0">リストが空です。下の「予定リストを編集する」から登録してください。</p>`}
+    </div>
+    <div class="label">自由に入力して追加</div>
+    <div class="freerow">
+      <input id="bulkFree" placeholder="例: 法事">
+      <button class="darkbtn" data-act="free">追加</button>
+    </div>
+    ${isSon ? `<p style="font-size:13px;color:#9aa7af;margin:8px 0 0">${esc(m.name)}の勤務は1日ひとつです。すでに入っている日は入れ替わります。</p>` : ""}
+    ${bulkMsg ? `<div class="bulkmsg">${esc(bulkMsg)}</div>` : ""}
+    <div class="sheetfoot">
+      <button class="linkbtn" data-act="settings">予定リストを編集する</button>
+      <button class="darkbtn" data-act="done">選択をやめて閉じる</button>
+    </div>`;
+}
+document.getElementById("bulkSheet").addEventListener("click", e => {
+  const t = e.target.closest("button");
+  if (!t) return;
+  if (t.dataset.mem) { bulkMember = t.dataset.mem; bulkMsg = ""; renderBulk(); return; }
+  if (t.dataset.preset !== undefined) { bulkAddEvents(bulkMember, t.dataset.preset); return; }
+  if (t.dataset.act === "free") {
+    const inp = document.getElementById("bulkFree");
+    const v = inp.value.trim();
+    if (v) { bulkAddEvents(bulkMember, v); const i2 = document.getElementById("bulkFree"); if (i2) i2.value = ""; }
+    return;
+  }
+  if (t.dataset.act === "settings") { closeBulk(); openSettings(); return; }
+  if (t.dataset.act === "done") { closeBulk(); clearSelDates(); return; }
+  if (t.dataset.act === "close") closeBulk();
+});
+document.getElementById("bulkOverlay").addEventListener("click", e => { if (e.target.id === "bulkOverlay") closeBulk(); });
 
 // ========== 予定選択モーダル ==========
 function openPick(date, memberId, onClose) {
@@ -1332,6 +1494,7 @@ renderCalendar();
 renderList();
 renderDiary();
 scrollToDate(todayKey);
+updateSelBar();
 </script>
 </body>
 </html>
