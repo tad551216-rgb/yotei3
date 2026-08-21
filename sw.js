@@ -1,7 +1,7 @@
 // わが家の予定板 (yotei3) Service Worker
 // キャッシュ名は tt:yotei3: で名前空間化し、同一オリジンの他アプリを消さない
 const NS = 'tt:yotei3:';
-const VERSION = 'v4';
+const VERSION = 'v5';
 const CACHE = NS + VERSION;
 
 const ASSETS = [

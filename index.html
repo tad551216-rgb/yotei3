@@ -136,6 +136,24 @@
   .recent .d { font-weight: bold; margin-right: 8px; }
   .recent .t { color: #8a979f; }
 
+  /* 日記の書く/一覧 切り替え */
+  .diarymode { display: flex; gap: 6px; margin-bottom: 12px; }
+  .diarymode button { flex: 1; border: 2px solid var(--line); border-radius: 12px; padding: 10px 0; font-size: 16px; font-weight: bold; color: #9aa7af; background: #fff; }
+  .diarymode button.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+  #diarySearch { width: 100%; border: 2px solid var(--line); border-radius: 12px; padding: 11px 12px; margin-bottom: 12px; }
+  .dmonth { font-size: 15px; font-weight: bold; color: #8a979f; margin: 18px 0 8px; }
+  .dcard { border: 2px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-bottom: 10px; }
+  .dcard.current { border-color: var(--ink); }
+  .dchead { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+  .ddate { font-size: 17px; font-weight: bold; }
+  .dedit { background: #F1F4F6; border-radius: 10px; padding: 7px 12px; font-size: 14px; font-weight: bold; flex-shrink: 0; }
+  .dtext { font-size: 17px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
+  .dtext.clip { display: -webkit-box; -webkit-line-clamp: 8; -webkit-box-orient: vertical; overflow: hidden; }
+  .dmore { color: #3E7CB1; font-size: 15px; font-weight: bold; text-decoration: underline; margin-top: 4px; }
+  .dthumbs { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; margin-top: 10px; }
+  .dthumbs img { width: 100%; height: 92px; object-fit: cover; border-radius: 10px; display: block; background: #EEF2F5; }
+  .dempty { color: #c4ccd1; font-size: 16px; padding: 20px 0; text-align: center; }
+
   /* モーダル */
   .overlay { position: fixed; inset: 0; background: rgba(34,51,59,0.45); z-index: 50; display: none; align-items: flex-end; justify-content: center; overflow-y: auto; }
   .overlay.open { display: flex; }
@@ -279,6 +297,11 @@ var TTDisp = (function () {
 
     <!-- 日記 -->
     <section class="view" id="view-diary">
+      <div class="diarymode">
+        <button data-dmode="write" class="on">書く</button>
+        <button data-dmode="list">一覧で読む</button>
+      </div>
+      <div id="diaryWrite">
       <div class="navrow">
         <button class="navbtn" id="diaryPrev">‹ 前の日</button>
         <button class="navtitle" id="diaryTitle" title="今日へ戻る"></button>
@@ -296,6 +319,11 @@ var TTDisp = (function () {
       <div class="recent">
         <h3>最近の日記</h3>
         <div id="recentList"></div>
+      </div>
+      </div>
+      <div id="diaryListWrap" style="display:none">
+        <input id="diarySearch" placeholder="文字でさがす（例: 白浜）">
+        <div id="diaryList"></div>
       </div>
     </section>
   </main>
@@ -462,6 +490,9 @@ function initListRange(center) {
 initListRange(today);
 let diaryDate = todayKey;
 let diaryDirty = false;
+let diaryMode = "write";   // "write" = その日を書く / "list" = 一覧で読む
+let diaryQuery = "";       // 一覧の検索文字
+const diaryOpened = new Set(); // 一覧で「全部読む」を押した日
 let pickCtx = null; // {date, memberId}
 const selDates = new Set(); // 一覧で選択中の日付(複数)
 let bulkMember = "m1";      // まとめて追加する相手
@@ -1368,6 +1399,7 @@ async function renderDiary() {
   diaryDirty = false;
   renderRecent();
   await renderThumbs(entry.photos || []);
+  if (diaryMode === "list") renderDiaryList();
 }
 async function renderThumbs(ids) {
   const wrap = document.getElementById("thumbs");
@@ -1406,6 +1438,97 @@ function renderRecent() {
     : `<p style="color:#c4ccd1">まだ日記はありません。今日のひとことをどうぞ。</p>`;
 }
 
+// ---------- 日記の一覧 ----------
+function allDiaryEntries() {
+  const out = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (!k || k.indexOf("fam-diary:") !== 0) continue;
+    const dict = load(k, {});
+    Object.keys(dict).forEach(date => {
+      const v = dict[date] || {};
+      if ((v.text && v.text.trim()) || (v.photos && v.photos.length)) out.push([date, v]);
+    });
+  }
+  out.sort((a, b) => b[0].localeCompare(a[0]));
+  return out;
+}
+function setDiaryMode(mode) {
+  if (diaryDirty) saveDiaryEntry();
+  diaryMode = mode;
+  document.querySelectorAll(".diarymode button").forEach(b => b.classList.toggle("on", b.dataset.dmode === mode));
+  document.getElementById("diaryWrite").style.display = mode === "write" ? "" : "none";
+  document.getElementById("diaryListWrap").style.display = mode === "list" ? "" : "none";
+  document.getElementById("view-diary").scrollTop = 0;
+  if (mode === "list") renderDiaryList();
+}
+async function renderDiaryList() {
+  const q = diaryQuery.trim();
+  let entries = allDiaryEntries();
+  if (q) entries = entries.filter(([date, v]) => (v.text || "").indexOf(q) !== -1 || date.indexOf(q) !== -1);
+  const wrap = document.getElementById("diaryList");
+  if (!entries.length) {
+    wrap.innerHTML = `<p class="dempty">${q ? "見つかりませんでした。" : "まだ日記はありません。「書く」から今日のひとことをどうぞ。"}</p>`;
+    return;
+  }
+  let html = "", lastYm = "";
+  const needPhotos = [];
+  entries.forEach(([date, v]) => {
+    const ym = date.slice(0, 7);
+    if (ym !== lastYm) {
+      lastYm = ym;
+      const [y, m] = ym.split("-").map(Number);
+      html += `<div class="dmonth">${y}年${m}月</div>`;
+    }
+    const dd = parseDate(date);
+    const label = `${dd.getFullYear()}年${dd.getMonth() + 1}月${dd.getDate()}日(${WEEK[dd.getDay()]})`;
+    const text = v.text || "";
+    const long = text.length > 160;
+    const opened = diaryOpened.has(date);
+    const photos = v.photos || [];
+    photos.forEach(id => needPhotos.push(id));
+    html += `<div class="dcard${date === diaryDate ? " current" : ""}">
+      <div class="dchead"><span class="ddate">${label}${date === todayKey ? "・今日" : ""}</span>
+        <button class="dedit" data-edit-date="${date}">この日を書く</button></div>
+      ${text ? `<div class="dtext${long && !opened ? " clip" : ""}">${esc(text)}</div>` : ""}
+      ${long && !opened ? `<button class="dmore" data-more-date="${date}">全部読む</button>` : ""}
+      ${photos.length ? `<div class="dthumbs">${photos.map(id => `<img data-pid="${id}" alt="日記の写真">`).join("")}</div>` : ""}
+    </div>`;
+  });
+  wrap.innerHTML = html;
+  for (const id of needPhotos) {
+    if (!photoCache[id]) {
+      try { photoCache[id] = await photoGet(id); } catch (e) { photoCache[id] = null; }
+    }
+    const el = wrap.querySelector(`#diaryList img[data-pid="${id}"]`);
+    if (el && photoCache[id]) el.src = photoCache[id];
+  }
+}
+document.querySelectorAll(".diarymode button").forEach(b => {
+  b.addEventListener("click", () => setDiaryMode(b.dataset.dmode));
+});
+document.getElementById("diarySearch").addEventListener("input", e => {
+  diaryQuery = e.target.value;
+  renderDiaryList();
+});
+document.getElementById("diaryList").addEventListener("click", e => {
+  const ed = e.target.closest("[data-edit-date]");
+  if (ed) {
+    if (diaryDirty) saveDiaryEntry();
+    diaryDate = ed.dataset.editDate;
+    setDiaryMode("write");
+    renderDiary();
+    return;
+  }
+  const mo = e.target.closest("[data-more-date]");
+  if (mo) { diaryOpened.add(mo.dataset.moreDate); renderDiaryList(); return; }
+  const img = e.target.closest("img[data-pid]");
+  if (img && photoCache[img.dataset.pid]) {
+    document.getElementById("photoViewerImg").src = photoCache[img.dataset.pid];
+    document.getElementById("photoViewer").classList.add("open");
+  }
+});
+
 document.getElementById("diaryText").addEventListener("input", () => { diaryDirty = true; });
 document.getElementById("diarySave").addEventListener("click", () => {
   saveDiaryEntry();
@@ -1413,6 +1536,7 @@ document.getElementById("diarySave").addEventListener("click", () => {
   btn.textContent = "保存しました ✓"; btn.classList.add("saved");
   setTimeout(() => { btn.textContent = "保存する"; btn.classList.remove("saved"); }, 1500);
   renderRecent();
+  if (diaryMode === "list") renderDiaryList();
 });
 function moveDiary(delta) {
   if (diaryDirty) saveDiaryEntry();
