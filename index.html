@@ -1623,5 +1623,117 @@ renderDiary();
 scrollToDate(todayKey);
 updateSelBar();
 </script>
+<!-- === つくる手帖 共通：アプリのインストール（自動設置） ===
+     設定画面に <div id="ttInstallBox"></div> があればその中に描き、
+     無ければインストール可能なときだけ画面下部に帯を出します。
+     HTMLの他の場所に手を入れる必要はありません。 -->
+<script>
+(function(){
+  var KEY = 'tt-install-dismissed';
+  var deferred = null, known = false, installed = false;
+
+  function isStandalone(){
+    return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+        || window.navigator.standalone === true;
+  }
+  function isIOS(){
+    return /iPad|iPhone|iPod/.test(navigator.userAgent)
+        || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  }
+  function dismissed(){ try{ return localStorage.getItem(KEY) === '1'; }catch(e){ return false; } }
+  function dismiss(){ try{ localStorage.setItem(KEY, '1'); }catch(e){} }
+
+  /* Chromeのタブから見ていても、インストール済みかどうかを確定的に取る。
+     manifest.json の related_applications に自己参照があることが前提。 */
+  function probe(){
+    if(!navigator.getInstalledRelatedApps){ render(); return; }
+    navigator.getInstalledRelatedApps().then(function(apps){
+      installed = apps.some(function(a){ return a.platform === 'webapp'; });
+      known = true; render();
+    }).catch(function(){ render(); });
+  }
+
+  function doInstall(after){
+    var ev = deferred; if(!ev) return;
+    deferred = null;
+    try{
+      ev.prompt();
+      ev.userChoice.then(function(res){ after(res && res.outcome === 'accepted'); });
+    }catch(err){ after(false); }
+  }
+
+  /* --- 設定画面の中に描く --- */
+  function renderBox(box){
+    if(isStandalone()){
+      box.innerHTML = '<p class="note" style="margin:0">インストール済みです。ホーム画面のアイコンから起動しています。</p>';
+      return;
+    }
+    if(known && installed && !deferred){
+      box.innerHTML = '<p class="note" style="margin:0">インストール済みです。ホーム画面のアイコンから開いてください。</p>';
+      return;
+    }
+    if(deferred){
+      box.innerHTML = '<p class="note" style="margin-top:0">ホーム画面にアイコンを置き、ブラウザの枠なしで起動できます。</p>'
+        + '<button type="button" id="ttInstallBtn" style="width:100%;padding:10px;border-radius:8px;border:1.5px solid #2c5077;background:#2c5077;color:#fff;font-size:14px;">アプリとしてインストール</button>';
+      document.getElementById('ttInstallBtn').onclick = function(){
+        doInstall(function(ok){
+          box.innerHTML = '<p class="note" style="margin:0">' + (ok
+            ? 'インストールしました。ホーム画面のアイコンから起動してください。'
+            : 'インストールを中止しました。やり直すには、この画面を再読み込みしてください。') + '</p>';
+        });
+      };
+      return;
+    }
+    if(isIOS()){
+      box.innerHTML = '<p class="note" style="margin:0">iPhone・iPadでは、Safariの共有ボタン（□に↑）から「ホーム画面に追加」を選んでください。</p>';
+      return;
+    }
+    box.innerHTML = '<p class="note" style="margin-top:0">'
+      + (known ? 'このアプリはまだインストールされていませんが、' : '')
+      + 'ブラウザからインストールの合図が届いていません。</p>'
+      + '<p class="note" style="margin:6px 0 0">・LINEやメールのアプリ内ブラウザで開いている（Chromeで開き直してください）<br>'
+      + '・ページを開いた直後で判定が終わっていない（再読み込みしてください）<br>'
+      + '・対応していないブラウザを使っている</p>';
+  }
+
+  /* --- 設定画面が無いアプリ向けの帯 --- */
+  function renderBar(){
+    var bar = document.getElementById('ttInstallBar');
+    if(!deferred || isStandalone() || dismissed()){ if(bar) bar.remove(); return; }
+    if(bar) return;
+    bar = document.createElement('div');
+    bar.id = 'ttInstallBar';
+    bar.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:9999;'
+      + 'display:flex;align-items:center;gap:10px;'
+      + 'padding:10px 12px calc(10px + env(safe-area-inset-bottom));'
+      + 'background:#fff;border-top:1px solid #dcdfe4;box-shadow:0 -2px 10px rgba(0,0,0,.08);'
+      + 'font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;font-size:14px;color:#1B2A4A;';
+    bar.innerHTML = '<span style="flex:1;line-height:1.4;">ホーム画面に追加して、アプリとして使えます。</span>'
+      + '<button type="button" id="ttBarYes" style="padding:8px 14px;border-radius:8px;border:0;background:#2c5077;color:#fff;font-size:14px;white-space:nowrap;">インストール</button>'
+      + '<button type="button" id="ttBarNo" aria-label="閉じる" style="padding:8px 10px;border-radius:8px;border:0;background:transparent;color:#8A8F98;font-size:18px;line-height:1;">×</button>';
+    document.body.appendChild(bar);
+    document.getElementById('ttBarYes').onclick = function(){
+      doInstall(function(){ var b = document.getElementById('ttInstallBar'); if(b) b.remove(); });
+    };
+    document.getElementById('ttBarNo').onclick = function(){ dismiss(); bar.remove(); };
+  }
+
+  function render(){
+    var box = document.getElementById('ttInstallBox');
+    if(box){ renderBox(box); }
+    if(document.body) renderBar();
+  }
+
+  window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); deferred = e; render(); });
+  window.addEventListener('appinstalled', function(){ deferred = null; installed = true; known = true; render(); });
+  window.ttRenderInstallCard = render;
+  /* 設定画面を組み直したあとに自動で追従する */
+  document.addEventListener('click', function(){ setTimeout(render, 0); });
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', probe);
+  else probe();
+})();
+</script>
+
 </body>
 </html>
